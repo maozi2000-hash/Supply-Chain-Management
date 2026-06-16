@@ -22,11 +22,13 @@ def create_app():
     def to_json_escaped(value):
         if value is None:
             return "[]"
-        return _json.dumps(
-            [{"sku": it.sku, "warehouse": it.warehouse or "", "quantity": it.quantity}
-             for it in value],
-            ensure_ascii=False,
-        )
+        result = []
+        for it in value:
+            item_dict = {"sku": it.sku, "quantity": it.quantity}
+            if hasattr(it, "warehouse") and it.warehouse is not None:
+                item_dict["warehouse"] = it.warehouse
+            result.append(item_dict)
+        return _json.dumps(result, ensure_ascii=False)
 
     # 确保目录存在
     os.makedirs(DATA_DIR, exist_ok=True)

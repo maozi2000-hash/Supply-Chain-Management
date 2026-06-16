@@ -1,87 +1,113 @@
-﻿{# 装柜记录详情页：数据展示 + 图片预览 + 导出入口 #}
+﻿{# 装柜详情页 #}
 {% extends "base.html" %}
-{% block title %}装柜详情 — {{ container.container_no }}{% endblock %}
+{% block title %}装柜详情 {{ container.container_no }}{% endblock %}
 {% block page_title %}装柜详情：{{ container.container_no }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.items-table { font-size: 13px; }
+.items-table th { background: #f8f9fb; font-size: 12px; padding: 8px 10px; }
+.items-table td { padding: 6px 10px; }
+.items-table .total-row { background: #f0f4ff; font-weight: 600; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+.diff-extra { color: #c5221f; font-weight: 600; }
+.diff-missing { color: #1a73e8; font-weight: 600; }
+</style>
+{% endblock %}
 
 {% block content %}
 
 <!-- 基本信息 -->
 <div class="card mb-3">
-  <div class="card-header">
-    装柜信息
+  <div class="card-header">基本信息
     <div>
       <a href="{{ url_for('container.edit_container', id=container.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
       <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-sm btn-success">导出 ZIP</a>
-      <form method="POST" action="{{ url_for('container.delete_container', id=container.id) }}" style="display:inline;"
-            onsubmit="return confirm('确定要删除此装柜记录吗？');">
-        <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-      </form>
+      <form method="POST" action="{{ url_for('container.delete_container', id=container.id) }}" style="display:inline;" onsubmit="return confirm('确定删除？');"><button class="btn btn-sm btn-outline-danger">删除</button></form>
     </div>
   </div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-sm-6 col-lg-4">
-        <label class="form-label">关联订单</label>
-        <p>
-          {% if container.order %}
-          <a href="{{ url_for('orders.order_detail', id=container.order.id) }}">{{ container.order.order_no }}</a>
-          — {{ container.order.customer_name }}
-          {% else %}-{% endif %}
-        </p>
-      </div>
-      <div class="col-sm-6 col-lg-4">
-        <label class="form-label">关联订舱</label>
-        <p>
-         {% if container.booking %}
-         {{ container.booking.custom_name or '' }} {{ container.booking.vessel_voyage or '' }} / {{ container.booking.shipping_company or '' }}
-          {% else %}-{% endif %}
-        </p>
-      </div>
+      <div class="col-sm-6 col-lg-4"><label class="form-label">关联订单</label><p>{% if container.order %}<a href="{{ url_for('orders.order_detail', id=container.order.id) }}">{{ container.order.order_no }}</a> -- {{ container.order.supplier_name }}{% else %}-{% endif %}</p></div>
+      <div class="col-sm-6 col-lg-4"><label class="form-label">关联订舱</label><p>{% if container.booking %}{{ container.booking.custom_name or '' }} {{ container.booking.vessel_voyage or '' }} / {{ container.booking.shipping_company or '' }}{% else %}-{% endif %}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">柜号</label><p class="fw-bold">{{ container.container_no }}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">装柜日期</label><p>{{ container.loading_date.strftime('%Y-%m-%d') if container.loading_date else '' }}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">件数</label><p>{{ container.cargo_count }}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">毛重 (KG)</label><p>{{ '%.2f'|format(container.weight) if container.weight else '' }}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">体积 (CBM)</label><p>{{ '%.2f'|format(container.volume) if container.volume else '' }}</p></div>
-      {% if container.remarks %}
-      <div class="col-12"><label class="form-label">备注</label><p>{{ container.remarks }}</p></div>
-      {% endif %}
+      {% if container.remarks %}<div class="col-12"><label class="form-label">备注</label><p>{{ container.remarks }}</p></div>{% endif %}
     </div>
   </div>
 </div>
 
-<!-- 图片预览 -->
-<div class="card mb-3">
-  <div class="card-header">
-    装柜图片 ({{ images|length if images else 0 }} 张)
-    <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-sm btn-success">
-      &#128229; 导出 ZIP
-    </a>
+<!-- 报关 + 真实 水平两列 -->
+<div class="two-col mb-3">
+  <div class="card">
+    <div class="card-header">报关数据 ({{ customs_items|length if customs_items else 0 }} 条)</div>
+    <div class="table-responsive">
+      <table class="table items-table">
+        <thead><tr><th>SKU</th><th>数量</th></tr></thead>
+        <tbody>
+          {% if customs_items %}{% for it in customs_items %}<tr><td>{{ it.sku }}</td><td>{{ it.quantity }}</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="2" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
+        </tbody>
+        <tfoot><tr class="total-row"><td class="text-end">合计</td><td>{% set ct=namespace(v=0) %}{% for it in customs_items %}{% set ct.v=ct.v+it.quantity %}{% endfor %}{{ ct.v }}</td></tr></tfoot>
+      </table>
+    </div>
   </div>
+
+  <div class="card">
+    <div class="card-header">装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)</div>
+    <div class="table-responsive">
+      <table class="table items-table">
+        <thead><tr><th>SKU</th><th>数量</th></tr></thead>
+        <tbody>
+          {% if actual_items %}{% for it in actual_items %}<tr><td>{{ it.sku }}</td><td>{{ it.quantity }}</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="2" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
+        </tbody>
+        <tfoot><tr class="total-row"><td class="text-end">合计</td><td>{% set at=namespace(v=0) %}{% for it in actual_items %}{% set at.v=at.v+it.quantity %}{% endfor %}{{ at.v }}</td></tr></tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 差异明细 -->
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between">差异明细 <a href="{{ url_for('container.export_diff', id=container.id) }}" class="btn btn-sm btn-outline-success">导出差异</a></div>
+  <div class="table-responsive">
+    <table class="table items-table">
+      <thead><tr><th>SKU</th><th>报关数量</th><th>真实数量</th><th>差异说明</th></tr></thead>
+      <tbody>
+        {% if diff_rows %}{% for dr in diff_rows %}<tr>
+          <td>{{ dr.sku }}</td><td>{{ dr.customs_qty }}</td><td>{{ dr.actual_qty }}</td>
+          <td class="{% if '真实' in dr.desc %}diff-extra{% else %}diff-missing{% endif %}">{{ dr.desc }}</td>
+        </tr>{% endfor %}
+        {% else %}<tr><td colspan="4" class="text-muted text-center py-2">数据一致</td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 图片 -->
+<div class="card mb-3">
+  <div class="card-header">装柜图片 ({{ images|length if images else 0 }} 张)</div>
   <div class="card-body">
     {% if images %}
     <div class="image-grid">
       {% for img in images %}
       <div class="image-item" data-image-full="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}">
-        <img src="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}"
-             alt="{{ img.original_name }}" loading="lazy">
+        <img src="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}" alt="{{ img.original_name }}" loading="lazy">
       </div>
       {% endfor %}
     </div>
-    {% else %}
-    <div class="empty-state py-3">
-      <div class="empty-icon">&#128247;</div>
-      <p>暂无装柜图片</p>
-      <a href="{{ url_for('container.edit_container', id=container.id) }}" class="btn btn-outline-primary">上传图片</a>
-    </div>
-    {% endif %}
+    {% else %}<div class="empty-state py-3"><p>暂无</p></div>{% endif %}
   </div>
 </div>
 
 <div class="d-flex gap-2">
   <a href="{{ url_for('container.list_container') }}" class="btn btn-outline-secondary">返回列表</a>
-  <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-success">
-    &#128229; 导出 ZIP（Excel + 图片）
-  </a>
+  <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-success">导出 ZIP</a>
 </div>
 
 {% endblock %}

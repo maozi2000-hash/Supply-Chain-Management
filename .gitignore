@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+*.pyo
+data/database.db
+uploads/*
+!uploads/.gitkeep
+exports/*
+!exports/.gitkeep
+.env
+*.code-workspace

@@ -110,6 +110,16 @@ class ContainerRecord(db.Model):
     images = db.relationship(
         "ContainerImage", backref="container_record", lazy="select",
         cascade="all, delete-orphan"
+   )
+
+    customs_items = db.relationship(
+        "CustomsItem", backref="container_record", lazy="select",
+        cascade="all, delete-orphan"
+    )
+
+    actual_items = db.relationship(
+        "ActualItem", backref="container_record", lazy="select",
+        cascade="all, delete-orphan"
     )
 
 
@@ -137,4 +147,31 @@ class OrderItem(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     sku = db.Column(db.String(100), nullable=False)
     warehouse = db.Column(db.String(100))
+    quantity = db.Column(db.Integer, default=0)
+
+# ============================================================
+# 报关明细表（关联装柜记录）
+# ============================================================
+class CustomsItem(db.Model):
+    __tablename__ = "customs_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    container_record_id = db.Column(
+        db.Integer, db.ForeignKey("container_records.id", ondelete="CASCADE"), nullable=False
+    )
+    sku = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, default=0)
+
+
+# ============================================================
+# 装柜真实明细表（关联装柜记录）
+# ============================================================
+class ActualItem(db.Model):
+    __tablename__ = "actual_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    container_record_id = db.Column(
+        db.Integer, db.ForeignKey("container_records.id", ondelete="CASCADE"), nullable=False
+    )
+    sku = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, default=0)
