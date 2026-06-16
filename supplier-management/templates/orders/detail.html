@@ -1,0 +1,242 @@
+﻿{# 订单详情页 #}
+{% extends "base.html" %}
+{% block title %}订单详情 — {{ order.order_no }}{% endblock %}
+{% block page_title %}订单详情：{{ order.order_no }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.items-table { font-size: 13px; }
+.items-table th { background: #f8f9fb; font-size: 12px; padding: 8px 10px; }
+.items-table td { padding: 6px 10px; }
+.items-table .copy-btn {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  font-size: 11px; padding: 0 4px; opacity: 0;
+  transition: opacity 0.15s;
+}
+.items-table td:hover .copy-btn { opacity: 1; }
+.items-table .total-row { background: #f0f4ff; font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- 基本信息 -->
+<div class="card mb-3">
+  <div class="card-header">
+    基本信息
+    <div>
+      <a href="{{ url_for('orders.edit_order', id=order.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+      <form method="POST" action="{{ url_for('orders.delete_order', id=order.id) }}" style="display:inline;"
+            onsubmit="return confirm('确定要删除订单 {{ order.order_no }} 吗？');">
+        <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+      </form>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-sm-6 col-lg-3"><label class="form-label">订单号</label><p class="fw-bold">{{ order.order_no }}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">供应商名称</label><p>{{ order.supplier_name }}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">柜名</label><p>{{ order.custom_name or '-' }}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">总数量</label><p class="fw-bold">{{ total_quantity }}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">状态</label><p><span class="badge badge-status status-{{ order.status }}">{{ order.status }}</span></p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">创建时间</label><p class="text-muted">{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '' }}</p></div>
+      {% if order.remarks %}
+      <div class="col-12"><label class="form-label">备注</label><p>{{ order.remarks }}</p></div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- 订单明细 -->
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between">
+    订单明细 ({{ items|length if items else 0 }} 条)
+    <div class="d-flex gap-1">
+      <a href="{{ url_for('orders.export_items', id=order.id) }}" class="btn btn-sm btn-outline-success">导出 Excel</a>
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table items-table">
+      <thead>
+        <tr>
+          <th>SKU <button class="copy-btn" onclick="copyCol('sku')" title="一键复制">&#128203;</button></th>
+          <th>仓库 <button class="copy-btn" onclick="copyCol('warehouse')" title="一键复制">&#128203;</button></th>
+          <th>数量 <button class="copy-btn" onclick="copyCol('quantity')" title="一键复制">&#128203;</button></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if items %}
+          {% for item in items %}
+          <tr>
+            <td><span class="copy-sku">{{ item.sku }}</span></td>
+            <td><span class="copy-wh">{{ item.warehouse or '' }}</span></td>
+            <td><span class="copy-qty">{{ item.quantity }}</span></td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3" class="text-muted text-center py-2">暂无明细</td></tr>
+        {% endif %}
+      </tbody>
+      <tfoot>
+        <tr class="total-row"><td colspan="2" class="text-end">合计</td><td>{{ total_quantity }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- 流程进度条 -->
+<div class="card mb-3">
+  <div class="card-header">订单流程进度</div>
+  <div class="card-body">
+    <div class="progress-track">
+      {% set steps = ['下单', '生产中', '生产完成', '订舱中', '已订舱', '装柜完成'] %}
+      {% set status_idx = {'下单': 0, '生产中': 1, '生产完成': 2, '订舱中': 3, '已订舱': 4, '装柜完成': 5} %}
+      {% set current_idx = status_idx.get(order.status, -1) %}
+      {% for step in steps %}
+        {% if order.status == '已取消' %}
+          <div class="progress-step {% if loop.index0 <= current_idx %}done{% elif loop.index0 == current_idx|int + 1 %}cancelled{% endif %}">{{ step }}</div>
+        {% else %}
+          <div class="progress-step {% if loop.index0 < current_idx %}done{% elif loop.index0 == current_idx %}active{% endif %}">{{ step }}</div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- 生产/订舱/装柜 关联表 -->
+<div class="card mb-3">
+  <div class="card-header">生产任务 <a href="{{ url_for('production.new_production', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">+</a></div>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead><tr><th>开始日期</th><th>预计完成</th><th>实际完成</th><th>状态</th><th>备注</th><th class="actions">操作</th></tr></thead>
+      <tbody>
+        {% if production_tasks %}
+          {% for task in production_tasks %}
+          <tr>
+            <td>{{ task.start_date.strftime('%Y-%m-%d') if task.start_date else '' }}</td>
+            <td>{{ task.expected_end_date.strftime('%Y-%m-%d') if task.expected_end_date else '' }}</td>
+            <td>{{ task.actual_end_date.strftime('%Y-%m-%d') if task.actual_end_date else '-' }}</td>
+            <td><span class="badge badge-status status-{{ task.status }}">{{ task.status }}</span></td>
+            <td>{{ task.remarks or '' }}</td>
+            <td class="actions"><a href="{{ url_for('production.edit_production', id=task.id) }}" class="btn btn-sm btn-outline-primary">编辑</a></td>
+          </tr>
+          {% endfor %}
+        {% else %}<tr><td colspan="6"><div class="empty-state py-3"><p class="mb-0">暂无</p></div></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">订舱记录 <a href="{{ url_for('booking.new_booking', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">+</a></div>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead><tr><th>柜名</th><th>航名/航次</th><th>提单号</th><th>船公司</th><th>开航日期</th><th>目地港</th><th>状态</th><th class="actions">操作</th></tr></thead>
+      <tbody>
+        {% if booking_records %}
+          {% for br in booking_records %}
+          <tr>
+            <td>{{ br.custom_name or '-' }}</td>
+            <td>{{ br.vessel_voyage or '-' }}</td>
+            <td>{{ br.bl_no or '-' }}</td>
+            <td>{{ br.shipping_company or '-' }}</td>
+            <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+            <td>{{ br.destination or '-' }}</td>
+            <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td class="actions"><a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-primary">编辑</a></td>
+          </tr>
+          {% endfor %}
+        {% else %}<tr><td colspan="8"><div class="empty-state py-3"><p class="mb-0">暂无</p></div></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">装柜记录 <a href="{{ url_for('container.new_container', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">+</a></div>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead><tr><th>柜号</th><th>装柜日期</th><th>件数</th><th>毛重(KG)</th><th>体积(CBM)</th><th>图片数</th><th class="actions">操作</th></tr></thead>
+      <tbody>
+        {% if container_records %}
+          {% for cr in container_records %}
+          <tr>
+            <td>{{ cr.container_no }}</td>
+            <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '' }}</td>
+            <td>{{ cr.cargo_count }}</td>
+            <td>{{ '%.2f'|format(cr.weight) if cr.weight else '' }}</td>
+            <td>{{ '%.2f'|format(cr.volume) if cr.volume else '' }}</td>
+            <td>{{ cr.images|length }}</td>
+            <td class="actions">
+              <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('container.edit_container', id=cr.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}<tr><td colspan="7"><div class="empty-state py-3"><p class="mb-0">暂无</p></div></td></tr>{% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyCol(col) {
+  var allItems = [
+    {% for item in items %}
+    {sku: "{{ item.sku }}", warehouse: "{{ item.warehouse or '' }}", quantity: {{ item.quantity }}}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+  if (!allItems || allItems.length === 0) {
+    showCopyAlert("暂无数据可复制");
+    return;
+  }
+  var vals = allItems.map(function(it) {
+    if (col === "sku") return it.sku;
+    if (col === "warehouse") return it.warehouse;
+    return String(it.quantity);
+  });
+  copyToClipboard(vals.join("\n"), col + " 列，共 " + vals.length + " 条");
+}
+
+function copyToClipboard(text, label) {
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try {
+    var ok = document.execCommand("copy");
+    if (ok) {
+      showCopyAlert("&#9989; 已复制 " + label);
+    } else {
+      showCopyAlert("&#10060; 复制失败，请重试");
+    }
+  } catch (e) {
+    showCopyAlert("&#10060; 复制失败，请重试");
+  }
+  document.body.removeChild(ta);
+}
+
+function showCopyAlert(msg) {
+  var overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.background = "rgba(0,0,0,0.2)";
+  overlay.innerHTML =
+    '<div class="modal-box" style="width:360px;text-align:center;padding:32px 24px;">' +
+    '<p style="font-size:16px;margin-bottom:16px;">' + msg + '</p>' +
+    '<button type="button" class="btn btn-primary" onclick="this.parentElement.parentElement.remove()">确定</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.addEventListener("click", function(e) {
+    if (e.target === overlay) overlay.remove();
+  });
+  setTimeout(function() { if (overlay.parentElement) overlay.remove(); }, 2000);
+}
+</script>
+{% endblock %}

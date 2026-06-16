@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}供应商管理系统{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+  <!-- ===== 侧边栏 ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">S</span>
+      供应商管理
+    </div>
+
+    <div class="sidebar-section">主菜单</div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('index') }}" class="{% if active_menu == 'dashboard' %}active{% endif %}">
+        <span class="nav-icon">&#9632;</span> 仪表盘
+      </a></li>
+    </ul>
+
+    <div class="sidebar-section">业务管理</div>
+    <ul class="sidebar-nav">
+      <li><a href="{{ url_for('orders.list_orders') }}" class="{% if active_menu == 'orders' %}active{% endif %}">
+        <span class="nav-icon">&#9632;</span> 订单管理
+      </a></li>
+      <li><a href="{{ url_for('production.list_production') }}" class="{% if active_menu == 'production' %}active{% endif %}">
+        <span class="nav-icon">&#9632;</span> 生产管理
+      </a></li>
+      <li><a href="{{ url_for('booking.list_booking') }}" class="{% if active_menu == 'booking' %}active{% endif %}">
+        <span class="nav-icon">&#9632;</span> 订舱管理
+      </a></li>
+      <li><a href="{{ url_for('container.list_container') }}" class="{% if active_menu == 'container' %}active{% endif %}">
+        <span class="nav-icon">&#9632;</span> 装柜管理
+      </a></li>
+    </ul>
+  </aside>
+
+  <!-- ===== 主内容区 ===== -->
+  <div class="main-wrapper">
+    <!-- 顶部导航 -->
+    <nav class="topbar">
+      <div class="d-flex align-items-center gap-3">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" type="button" aria-label="菜单">&#9776;</button>
+        <span class="page-title">{% block page_title %}仪表盘{% endblock %}</span>
+      </div>
+      <div class="user-menu">
+        {% if current_user.is_authenticated %}
+          <span class="text-muted">{{ current_user.display_name or current_user.username }}</span>
+          <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-secondary btn-sm">退出</a>
+        {% else %}
+          <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">登录</a>
+        {% endif %}
+      </div>
+    </nav>
+
+    <!-- Flash 消息 -->
+    <div class="flash-messages px-3 pt-3">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+              {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+    </div>
+
+    <!-- 页面主体内容 -->
+    <div class="page-content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>
