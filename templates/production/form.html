@@ -1,0 +1,71 @@
+﻿{# 生产任务新增/编辑表单 #}
+{% extends "base.html" %}
+{% block title %}{% if task %}编辑生产任务{% else %}创建生产任务{% endif %} — 供应商管理系统{% endblock %}
+{% block page_title %}{% if task %}编辑生产任务{% else %}创建生产任务{% endif %}{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-body">
+    <form method="POST"
+          action="{% if task %}{{ url_for('production.edit_production', id=task.id) }}{% else %}{{ url_for('production.new_production') }}{% endif %}">
+
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label for="order_id" class="form-label">关联订单 <span class="required">*</span></label>
+          <select class="form-select" id="order_id" name="order_id" required>
+            <option value="">— 请选择订单 —</option>
+            {% for o in orders %}
+            <option value="{{ o.id }}"
+              {% if task and task.order_id == o.id %}selected{% endif %}
+              {% if selected_order_id and o.id == selected_order_id|int %}selected{% endif %}>
+              {{ o.order_no }} — {{ o.customer_name }} ({{ o.status }})
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-md-3">
+          <label for="start_date" class="form-label">开始日期 <span class="required">*</span></label>
+          <input type="date" class="form-control" id="start_date" name="start_date"
+                 value="{{ task.start_date.strftime('%Y-%m-%d') if task and task.start_date else '' }}" required>
+        </div>
+
+        <div class="col-md-3">
+          <label for="expected_end_date" class="form-label">预计完成日期</label>
+          <input type="date" class="form-control" id="expected_end_date" name="expected_end_date"
+                 value="{{ task.expected_end_date.strftime('%Y-%m-%d') if task and task.expected_end_date else '' }}">
+        </div>
+
+        <div class="col-md-3">
+          <label for="actual_end_date" class="form-label">实际完成日期</label>
+          <input type="date" class="form-control" id="actual_end_date" name="actual_end_date"
+                 value="{{ task.actual_end_date.strftime('%Y-%m-%d') if task and task.actual_end_date else '' }}">
+        </div>
+
+        <div class="col-md-3">
+          <label for="status" class="form-label">状态</label>
+          <select class="form-select" id="status" name="status">
+            <option value="待生产" {% if task and task.status == '待生产' %}selected{% endif %}>待生产</option>
+            <option value="生产中" {% if task and task.status == '生产中' %}selected{% endif %}>生产中</option>
+            <option value="已完成" {% if task and task.status == '已完成' %}selected{% endif %}>已完成</option>
+          </select>
+        </div>
+
+        <div class="col-12">
+          <label for="remarks" class="form-label">备注</label>
+          <textarea class="form-control" id="remarks" name="remarks" rows="3">{{ task.remarks if task else '' }}</textarea>
+        </div>
+      </div>
+
+      <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          {% if task %}保存修改{% else %}创建生产任务{% endif %}
+        </button>
+        <a href="{{ url_for('production.list_production') }}" class="btn btn-outline-secondary">返回列表</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

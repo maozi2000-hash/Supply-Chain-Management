@@ -1,0 +1,114 @@
+﻿{# 仪表盘 #}
+{% extends "base.html" %}
+{% block title %}仪表盘 — 供应商管理系统{% endblock %}
+{% block page_title %}仪表盘{% endblock %}
+
+{% block content %}
+
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e8f0fe;color:#1a73e8;">&#9745;</div>
+      <div>
+        <div class="stat-value">{{ total_orders }}</div>
+        <div class="stat-label">订单总数</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fef7e0;color:#b06000;">&#9881;</div>
+      <div>
+        <div class="stat-value">{{ status_counts.get('生产中', 0) + status_counts.get('生产完成', 0) }}</div>
+        <div class="stat-label">生产中 / 已完成</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#e6f4ea;color:#137333;">&#9973;</div>
+      <div>
+        <div class="stat-value">{{ status_counts.get('已订舱', 0) + status_counts.get('装柜完成', 0) }}</div>
+        <div class="stat-label">已订舱 / 装柜完成</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-icon" style="background:#fce8e6;color:#c5221f;">&#10006;</div>
+      <div>
+        <div class="stat-value">{{ status_counts.get('已取消', 0) }}</div>
+        <div class="stat-label">已取消</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        最近订单
+        <a href="{{ url_for('orders.list_orders') }}" class="btn btn-sm btn-outline-primary">查看全部</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>客户</th>
+              <th>品名</th>
+              <th>状态</th>
+              <th>创建时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if recent_orders %}
+              {% for order in recent_orders %}
+              <tr class="cursor-pointer" onclick="location.href='{{ url_for('orders.order_detail', id=order.id) }}'">
+                <td><a href="{{ url_for('orders.order_detail', id=order.id) }}">{{ order.order_no }}</a></td>
+                <td>{{ order.supplier_name }}</td>
+                <td>{{ order.custom_name or '-' }}</td>
+                <td><span class="badge badge-status status-{{ order.status }}">{{ order.status }}</span></td>
+                <td class="text-muted">{{ order.created_at.strftime('%Y-%m-%d') if order.created_at else '' }}</td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="5">
+                <div class="empty-state"><div class="empty-icon">&#128203;</div><p>暂无订单数据</p></div>
+              </td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">快捷操作</div>
+      <div class="card-body d-grid gap-2">
+        <a href="{{ url_for('orders.new_order') }}" class="btn btn-outline-primary">+ 新增订单</a>
+        <a href="{{ url_for('production.new_production') }}" class="btn btn-outline-primary">+ 创建生产任务</a>
+        <a href="{{ url_for('booking.new_booking') }}" class="btn btn-outline-primary">+ 创建订舱记录</a>
+        <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-primary">+ 新增装柜记录</a>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">订单状态分布</div>
+      <div class="card-body">
+        {% if status_counts %}
+          {% for status_name, count in status_counts.items() %}
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="badge badge-status status-{{ status_name }}">{{ status_name }}</span>
+            <span class="fw-bold">{{ count }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted text-center mb-0">暂无数据</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

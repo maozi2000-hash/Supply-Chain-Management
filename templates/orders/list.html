@@ -1,0 +1,104 @@
+﻿{# 订单列表页 #}
+{% extends "base.html" %}
+{% block title %}订单管理 — 供应商管理系统{% endblock %}
+{% block page_title %}订单管理{% endblock %}
+
+{% block content %}
+
+<!-- 搜索与筛选 -->
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('orders.list_orders') }}" class="search-bar">
+      <input type="text" name="keyword" class="form-control" placeholder="搜索订单号或客户名..."
+             value="{{ keyword or '' }}">
+      <select name="status" class="form-select">
+        <option value="">全部状态</option>
+        {% for opt_value, opt_label in status_options %}
+        <option value="{{ opt_value }}" {% if current_status == opt_value %}selected{% endif %}>{{ opt_label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-primary">搜索</button>
+      <a href="{{ url_for('orders.list_orders') }}" class="btn btn-outline-secondary">重置</a>
+      <a href="{{ url_for('orders.new_order') }}" class="btn btn-success ms-auto">+ 新增订单</a>
+    </form>
+  </div>
+</div>
+
+<!-- 订单表格 -->
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>订单号</th>
+          <th>供应商名称</th>
+          <th>柜名</th>
+          <th>状态</th>
+          <th>创建时间</th>
+          <th class="actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if orders %}
+          {% for order in orders %}
+          <tr>
+            <td>
+              <a href="{{ url_for('orders.order_detail', id=order.id) }}">{{ order.order_no }}</a>
+            </td>
+            <td>{{ order.supplier_name }}</td>
+            <td>{{ order.custom_name or '-' }}</td>
+            <td><span class="badge badge-status status-{{ order.status }}">{{ order.status }}</span></td>
+            <td class="text-muted">{{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '' }}</td>
+            <td class="actions">
+              <a href="{{ url_for('orders.order_detail', id=order.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('orders.edit_order', id=order.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+              <form method="POST" action="{{ url_for('orders.delete_order', id=order.id) }}" style="display:inline;"
+                    onsubmit="return confirm('确定要删除订单 {{ order.order_no }} 吗？\n删除后关联的生产、订舱、装柜数据也将一并删除。');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="7">
+            <div class="empty-state">
+              <div class="empty-icon">&#128203;</div>
+              <p>{% if keyword or current_status %}没有找到匹配的订单{% else %}暂无订单数据{% endif %}</p>
+              {% if not keyword and not current_status %}
+              <a href="{{ url_for('orders.new_order') }}" class="btn btn-primary">创建第一条订单</a>
+              {% endif %}
+            </div>
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- 分页 -->
+  {% if pagination and pagination.pages > 1 %}
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="text-muted">共 {{ pagination.total }} 条记录</span>
+    <nav>
+      <ul class="pagination mb-0">
+        {% if pagination.has_prev %}
+        <li class="page-item"><a class="page-link" href="{{ url_for('orders.list_orders', page=pagination.prev_num, keyword=keyword, status=current_status) }}">上一页</a></li>
+        {% endif %}
+        {% for p in pagination.iter_pages() %}
+          {% if p %}
+          <li class="page-item {% if p == pagination.page %}active{% endif %}">
+            <a class="page-link" href="{{ url_for('orders.list_orders', page=p, keyword=keyword, status=current_status) }}">{{ p }}</a>
+          </li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">...</span></li>
+          {% endif %}
+        {% endfor %}
+        {% if pagination.has_next %}
+        <li class="page-item"><a class="page-link" href="{{ url_for('orders.list_orders', page=pagination.next_num, keyword=keyword, status=current_status) }}">下一页</a></li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
