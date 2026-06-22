@@ -123,6 +123,12 @@ def new_container():
                 synced_items=None,
             )
 
+        # 检查是否已有相同柜号（防止 debug reloader 重复提交）
+        existing = ContainerRecord.query.filter_by(container_no=container.container_no).first()
+        if existing:
+            flash("柜号 " + container.container_no + " 已存在", "warning")
+            return redirect(url_for("container.container_detail", id=existing.id))
+
         db.session.add(container)
         db.session.flush()
 
@@ -170,61 +176,28 @@ def container_detail(id):
     actual_items = container.actual_items
     diff_rows = _compute_diff(customs_items, actual_items)
 
+    # 加载 SKU 产品库，构建 SKU -> 体积/成本映射
+    from models import SkuProduct
+    sku_products = SkuProduct.query.all()
+    sku_map = {}
+    for sp in sku_products:
+        vol = (sp.length or 0) * (sp.width or 0) * (sp.height or 0) / 1_000_000
+        sku_map[sp.sku] = {
+            "name": sp.name or "",
+            "length": sp.length or 0,
+            "width": sp.width or 0,
+            "height": sp.height or 0,
+            "gross_weight": sp.gross_weight or 0,
+            "volume_m3": round(vol, 6),
+            "unit_cost": sp.unit_cost or 0,
+        }
+
     return render_template(
         "container/detail.html", active_menu="container",
         container=container, images=images,
         customs_items=customs_items, actual_items=actual_items,
-        diff_rows=diff_rows,
+        diff_rows=diff_rows, sku_map=sku_map,
     )
-
-
-@container_bp.route("/<int:id>/edit", methods=["GET", "POST"])
-@login_required
-def edit_container(id):
-    container = db.session.get(ContainerRecord, id)
-    if not container:
-        flash("装柜记录不存在", "error")
-        return redirect(url_for("container.list_container"))
-
-    orders = Order.query.order_by(Order.created_at.desc()).all()
-    bookings = BookingRecord.query.order_by(db.desc(BookingRecord.id)).all()
-
-    if request.method == "POST":
-        updated = _build_container_from_form(request, container)
-        if updated is None:
-            return render_template(
-                "container/form.html", active_menu="container", container=container,
-                orders=orders, bookings=bookings,
-                selected_order_id=str(container.order_id),
-                synced_items=None,
-            )
-
-        zip_file = request.files.get("image_zip")
-        if zip_file and zip_file.filename:
-            saved, err = _extract_zip_images(container, zip_file)
-            if err:
-                flash(err, "warning")
-
-        customs_json = request.form.get("customs_json", "[]")
-        actual_json = request.form.get("actual_json", "[]")
-        _save_items(container, customs_json, actual_json)
-
-        db.session.commit()
-        flash("装柜记录更新成功", "success")
-        return redirect(url_for("container.container_detail", id=container.id))
-
-    customs_data = [{"sku": ci.sku, "quantity": ci.quantity} for ci in container.customs_items]
-    actual_data = [{"sku": ai.sku, "quantity": ai.quantity} for ai in container.actual_items]
-    synced_items = {"customs": customs_data, "actual": actual_data}
-
-    return render_template(
-        "container/form.html", active_menu="container", container=container,
-        orders=orders, bookings=bookings,
-        selected_order_id=str(container.order_id) if container.order_id else "",
-        synced_items=synced_items,
-    )
-
-
 @container_bp.route("/<int:id>/delete", methods=["POST"])
 @login_required
 def delete_container(id):

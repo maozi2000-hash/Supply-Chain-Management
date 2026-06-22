@@ -19,13 +19,30 @@
 .modal-box { background: #fff; border-radius: 8px; padding: 24px; width: 400px; max-width: 92vw; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
 .sku-row { display: flex; gap: 8px; align-items: end; margin-bottom: 10px; }
 .sku-row .form-control { flex: 1; }
-</style>
+
+/* ---- SKU 自动补全下拉 ---- */
+.autocomplete-wrapper { position: relative; }
+.autocomplete-list {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 1050;
+  max-height: 200px; overflow-y: auto;
+  background: #fff; border: 1px solid #d0d0d0; border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12); display: none;
+}
+.autocomplete-list.show { display: block; }
+.autocomplete-item {
+  padding: 6px 10px; font-size: 13px; cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+.autocomplete-item:hover, .autocomplete-item.active { background: #e8f0fe; }
+.autocomplete-item .sku-code { font-weight: 600; }
+.autocomplete-item .sku-info { color: #5f6368; font-size: 11px; margin-left: 8px; }
+</style></style>
 {% endblock %}
 
 {% block content %}
 
 <form method="POST"
-  action="{% if container %}{{ url_for('container.edit_container', id=container.id) }}{% else %}{{ url_for('container.new_container') }}{% endif %}"
+  action="{% if container %}{{ url_for('container.new_container', id=container.id) }}{% else %}{{ url_for('container.new_container') }}{% endif %}"
   enctype="multipart/form-data" id="containerForm">
 
   <!-- ===== 基本信息 ===== -->
@@ -74,8 +91,16 @@
       </div>
       <div class="table-responsive">
         <table class="table items-table">
-          <thead><tr><th>SKU</th><th>数量</th><th style="width:40px;"></th></tr></thead>
-          <tbody id="customsBody"><tr><td colspan="3" class="text-muted text-center py-2">暂无</td></tr></tbody>
+          <thead><tr><th>SKU</th><th>数量</th><th>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>头程预估单价</span>
+          <span style="font-weight:400;font-size:11px;color:#5f6368;">总价 $</span>
+          <input type="number" class="form-control form-control-sm freight-total-input" step="0.01" min="0"
+                 placeholder="0" style="width:80px;height:26px;font-size:11px;"
+                 onchange="onFreightTotalChange(this)" data-type="customs">
+        </div>
+      </th><th style="width:40px;"></th></tr></thead>
+          <tbody id="customsBody"><tr><td colspan="4" class="text-muted text-center py-2">暂无</td></tr></tbody>
           <tfoot id="customsFoot"></tfoot>
         </table>
         <div class="copy-bar">
@@ -97,8 +122,16 @@
       </div>
       <div class="table-responsive">
         <table class="table items-table">
-          <thead><tr><th>SKU</th><th>数量</th><th style="width:40px;"></th></tr></thead>
-          <tbody id="actualBody"><tr><td colspan="3" class="text-muted text-center py-2">暂无</td></tr></tbody>
+          <thead><tr><th>SKU</th><th>数量</th><th>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>头程实际单价</span>
+          <span style="font-weight:400;font-size:11px;color:#5f6368;">总价 $</span>
+          <input type="number" class="form-control form-control-sm freight-total-input" step="0.01" min="0"
+                 placeholder="0" style="width:80px;height:26px;font-size:11px;"
+                 onchange="onFreightTotalChange(this)" data-type="actual">
+        </div>
+      </th><th style="width:40px;"></th></tr></thead>
+          <tbody id="actualBody"><tr><td colspan="4" class="text-muted text-center py-2">暂无</td></tr></tbody>
           <tfoot id="actualFoot"></tfoot>
         </table>
         <div class="copy-bar">
@@ -110,6 +143,8 @@
     </div>
   </div>
 
+  
+  
   <!-- ===== 差异明细 ===== -->
   <div class="card mt-3">
     <div class="card-header d-flex justify-content-between">差异明细 {% if container %}<a href="{{ url_for('container.export_diff', id=container.id) }}" class="btn btn-sm btn-outline-success">导出差异</a>{% endif %}</div>
@@ -216,7 +251,7 @@ function renderItemTable(type) {
   foot.innerHTML = "";
 
   if (data.length === 0) {
-    body.innerHTML = '<tr><td colspan="3" class="text-muted text-center py-2">暂无</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" class="text-muted text-center py-2">暂无</td></tr>';
     return;
   }
 
@@ -226,19 +261,29 @@ function renderItemTable(type) {
     total += q;
     var tr = document.createElement("tr");
 
-    // SKU 可编辑
+    // SKU 可编辑（带自动补全）
     var tdSku = document.createElement("td");
+    var wrapper = document.createElement("div");
+    wrapper.className = "autocomplete-wrapper";
     var inpSku = document.createElement("input");
     inpSku.type = "text";
-    inpSku.className = "form-control form-control-sm";
+    inpSku.className = "form-control form-control-sm sku-autocomplete";
     inpSku.style.cssText = "border:none;background:transparent;padding:2px 4px;font-size:13px;width:100%;";
     inpSku.value = it.sku;
+    inpSku.autocomplete = "off";
+    // 自动补全下拉
+    var list = document.createElement("div");
+    list.className = "autocomplete-list";
+    setupSkuAutocomplete(inpSku, list);
+    // 保存数据
     inpSku.addEventListener("change", function() {
       itemsData[type][idx].sku = this.value.trim() || itemsData[type][idx].sku;
       computeDiff();
       syncHiddenFields();
     });
-    tdSku.appendChild(inpSku);
+    wrapper.appendChild(inpSku);
+    wrapper.appendChild(list);
+    tdSku.appendChild(wrapper);
     tr.appendChild(tdSku);
 
     // 数量可编辑
@@ -257,6 +302,16 @@ function renderItemTable(type) {
     tdQty.appendChild(inpQty);
     tr.appendChild(tdQty);
 
+    // 头程单价（只读显示）
+    var tdFreight = document.createElement("td");
+    var spanFreight = document.createElement("span");
+    spanFreight.className = "freight-unit";
+    spanFreight.style.cssText = "font-size:12px;color:#0d904f;font-weight:500;";
+    var fu = it.freight_unit_actual || it.freight_unit_est || it.freight_unit;
+    spanFreight.textContent = fu ? "$" + fu.toFixed(4) : "-";
+    tdFreight.appendChild(spanFreight);
+    tr.appendChild(tdFreight);
+
     // 删除按钮
     var tdBtn = document.createElement("td");
     var btn = document.createElement("button");
@@ -273,7 +328,7 @@ function renderItemTable(type) {
     body.appendChild(tr);
   });
 
-  foot.innerHTML = '<tr class="total-row"><td class="text-end">合计</td><td>' + total + '</td><td></td></tr>';
+  foot.innerHTML = '<tr class="total-row"><td class="text-end">合计</td><td>' + total + '</td><td></td><td></td></tr>';
 }
 
 function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
@@ -281,6 +336,69 @@ function esc(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").re
 // ============================================================
 // 差异
 // ============================================================
+
+// ============================================================
+// 头程单价计算
+// ============================================================
+var _skuVolumeCache = {};
+var _freightTotals = {};  // { customs: number, actual: number }
+
+function loadSkuVolumes(callback) {
+  fetch("/sku/all")
+    .then(function(r){ return r.json(); })
+    .then(function(skus) {
+      skus.forEach(function(s) { _skuVolumeCache[s.sku.toUpperCase()] = s.volume_m3 || 0; });
+      if (callback) callback();
+    })
+    .catch(function(){ if (callback) callback(); });
+}
+
+function onFreightTotalChange(inputEl) {
+  var type = inputEl.getAttribute("data-type");  // "customs" 或 "actual"
+  var totalFreight = parseFloat(inputEl.value) || 0;
+  _freightTotals[type] = totalFreight;
+  if (totalFreight <= 0) {
+    // 清除该类型的头程单价
+    var data = itemsData[type] || [];
+    data.forEach(function(it) { it.freight_unit = 0; });
+    // 同步另一个输入框的值如果有
+    var otherType = type === "customs" ? "actual" : "customs";
+    var otherInput = document.querySelector('.freight-total-input[data-type="' + otherType + '"]');
+    if (otherInput && (parseFloat(otherInput.value)||0) > 0) {
+      // 另一个也有值，用另一个计算
+      calcSingleTypeFreight(otherType);
+    }
+    renderItems();
+    return;
+  }
+  calcSingleTypeFreight(type);
+}
+
+function calcSingleTypeFreight(type) {
+  var totalFreight = _freightTotals[type] || 0;
+  if (totalFreight <= 0) { renderItems(); return; }
+
+  loadSkuVolumes(function() {
+    // 只计算对应类型的总方数
+    var totalCbm = 0;
+    var data = itemsData[type] || [];
+    data.forEach(function(it) {
+      var vol = _skuVolumeCache[it.sku.trim().toUpperCase()] || 0;
+      totalCbm += vol * (it.quantity || 0);
+    });
+
+    if (totalCbm <= 0) { renderItems(); return; }
+
+    var rate = totalFreight / totalCbm;
+    data.forEach(function(it) {
+      var vol = _skuVolumeCache[it.sku.trim().toUpperCase()] || 0;
+      it.freight_unit = vol * rate;
+    });
+    renderItems();
+  });
+}
+
+
 function computeDiff() {
   var cm = {}, am = {};
   itemsData.customs.forEach(function(it) {
@@ -366,12 +484,11 @@ function showManualModal(type) {
     '<div class="modal-box">'+
     '<h5 style="margin-bottom:14px;">'+(type==="customs"?"报关数据":"真实装柜数据")+' -- 添加/删除</h5>'+
     '<div class="sku-row">'+
-    '<div style="flex:1;"><label class="form-label">SKU</label><input type="text" class="form-control" id="manSku" placeholder="SKU"></div>'+
+    '<div style="flex:1;"><label class="form-label">SKU</label><div class="autocomplete-wrapper"><input type="text" class="form-control sku-autocomplete" id="manSku" placeholder="输入 SKU 搜索..." autocomplete="off"><div class="autocomplete-list" id="manSkuList"></div></div></div>'+
     '<div style="width:90px;"><label class="form-label">数量</label><input type="number" class="form-control" id="manQty" value="1" min="1"></div>'+
     '</div>'+
     '<div class="d-flex gap-2 mb-3">'+
-    '<button type="button" class="btn btn-success btn-sm" id="btnAdd">+ 添加</button>'+
-    '<button type="button" class="btn btn-danger btn-sm" id="btnRemove">- 删除</button>'+
+    '<button type="button" class="btn btn-primary btn-sm" id="btnApply">确认修改</button>'+
     '</div>'+
     '<div id="manMsg" style="font-size:13px;"></div>'+
     '</div>';
@@ -379,33 +496,185 @@ function showManualModal(type) {
   ov.addEventListener("click", function(e){ if(e.target===ov) closeModal("manualModal"); });
 
   // 用 addEventListener 绑定，避免 innerHTML onclick 转义问题
-  document.getElementById("btnAdd").addEventListener("click", function(){ manualOp("add"); });
-  document.getElementById("btnRemove").addEventListener("click", function(){ manualOp("remove"); });
+  document.getElementById("btnApply").addEventListener("click", function(){ manualOp(); });
+  // 绑定弹窗 SKU 输入框的自动补全
+  var manSkuEl = document.getElementById("manSku");
+  var manSkuList = document.getElementById("manSkuList");
+  if (manSkuEl && manSkuList) setupSkuAutocomplete(manSkuEl, manSkuList);
 }
 
-function manualOp(mode) {
+
+// ============================================================
+// SKU 自动补全功能
+// ============================================================
+var _skuCache = null;
+var _skuCacheTime = 0;
+
+function loadSkuCache(callback) {
+  // 缓存 30 秒
+  if (_skuCache && (Date.now() - _skuCacheTime) < 30000) {
+    callback(_skuCache);
+    return;
+  }
+  fetch("/sku/export")
+    .then(function(r){ return r.blob(); })
+    .catch(function(){ return null; });
+  // 用 lookup 接口逐个查太慢，改用 batch 思路：
+  // 预加载全部 SKU 名称列表
+  fetch("/sku/lookup?sku=")
+    .then(function(){});
+  // 直接用 fetch 全量：遍历分页太复杂，改为每次输入时实时查询
+  callback(null);
+}
+
+function setupSkuAutocomplete(input, listEl) {
+  var timer = null;
+  input.addEventListener("input", function() {
+    clearTimeout(timer);
+    var val = this.value.trim();
+    if (!val || val.length < 1) {
+      listEl.classList.remove("show");
+      return;
+    }
+    timer = setTimeout(function() {
+      fetch("/sku/lookup?sku=" + encodeURIComponent(val))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          listEl.innerHTML = "";
+          if (!data) {
+            // 没有精确匹配，用搜索模式
+            return searchSkuPrefix(val, listEl, input);
+          }
+          renderAutocompleteRow(listEl, data, input);
+          listEl.classList.add("show");
+        })
+        .catch(function() { listEl.classList.remove("show"); });
+    }, 200);
+  });
+
+  input.addEventListener("blur", function() {
+    setTimeout(function() { listEl.classList.remove("show"); }, 200);
+  });
+
+  input.addEventListener("focus", function() {
+    if (listEl.children.length > 0) listEl.classList.add("show");
+  });
+
+  input.addEventListener("keydown", function(e) {
+    if (!listEl.classList.contains("show")) return;
+    var items = listEl.querySelectorAll(".autocomplete-item");
+    var active = listEl.querySelector(".autocomplete-item.active");
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (!active && items.length > 0) { items[0].classList.add("active"); return; }
+      var next = active ? active.nextElementSibling : null;
+      if (active) active.classList.remove("active");
+      if (next) next.classList.add("active"); else if (items.length > 0) items[0].classList.add("active");
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      var prev = active ? active.previousElementSibling : null;
+      if (active) active.classList.remove("active");
+      if (prev) prev.classList.add("active"); else if (items.length > 0) items[items.length-1].classList.add("active");
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (active) {
+        this.value = active.getAttribute("data-sku");
+        listEl.classList.remove("show");
+        this.dispatchEvent(new Event("change", {bubbles: true}));
+      }
+    }
+  });
+}
+
+function searchSkuPrefix(prefix, listEl, input) {
+  // 模糊搜索：用 AJAX 从服务端获取匹配的 SKU
+  fetch("/sku/export")
+    .then(function() {})
+    .catch(function() {});
+  // 简化：用已有的 lookup 接口，传空时返回 null；我们需要一个前缀搜索接口
+  // 暂时用客户端从全量数据搜索。为此我们在页面加载时预取所有 SKU。
+  if (!_skuCache) {
+    loadAllSkus(function(skus) {
+      _skuCache = skus;
+      _skuCacheTime = Date.now();
+      doPrefixMatch(prefix, skus, listEl, input);
+    });
+  } else {
+    doPrefixMatch(prefix, _skuCache, listEl, input);
+  }
+}
+
+function loadAllSkus(callback) {
+  // 从 /sku/export 下载 Excel 不太可行，改用新接口
+  // 先做一个简单的：分页拉取全部
+  var allSkus = [];
+  function fetchPage(page) {
+    fetch("/sku/lookup?sku=")  // 这个查不到
+      .then(function(){});
+    // 直接 fetch 列表页是不行的。我们需要添加一个 API
+    // 暂时用 fetch + 简单方式
+    callback([]);
+  }
+  // 更好的方式：添加 /sku/all 接口
+  fetch("/sku/all")
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      callback(data || []);
+    })
+    .catch(function() { callback([]); });
+}
+
+function doPrefixMatch(prefix, skus, listEl, input) {
+  prefix = prefix.toUpperCase();
+  var matches = skus.filter(function(s) {
+    return s.sku.toUpperCase().indexOf(prefix) >= 0 || (s.name && s.name.toUpperCase().indexOf(prefix) >= 0);
+  }).slice(0, 10);
+  listEl.innerHTML = "";
+  matches.forEach(function(p) {
+    renderAutocompleteRow(listEl, p, input);
+  });
+  if (matches.length > 0) listEl.classList.add("show");
+  else listEl.classList.remove("show");
+}
+
+function renderAutocompleteRow(listEl, product, input) {
+  var div = document.createElement("div");
+  div.className = "autocomplete-item";
+  div.setAttribute("data-sku", product.sku);
+  var vol = product.volume_m3 ? product.volume_m3.toFixed(4) : "0";
+  div.innerHTML = '<span class="sku-code">' + product.sku + '</span>' +
+    (product.name ? '<span class="sku-info">' + product.name + '</span>' : '') +
+    (product.length ? '<span class="sku-info">' + product.length + 'x' + product.width + 'x' + product.height + 'cm ' + vol + 'm³</span>' : '');
+  div.addEventListener("mousedown", function(e) {
+    e.preventDefault();
+    input.value = product.sku;
+    listEl.classList.remove("show");
+    input.dispatchEvent(new Event("change", {bubbles: true}));
+    input.focus();
+  });
+  listEl.appendChild(div);
+}
+
+function manualOp() {
   var skuEl = document.getElementById("manSku");
   var qtyEl = document.getElementById("manQty");
   var msgEl = document.getElementById("manMsg");
   if (!skuEl || !qtyEl) return;
   var sku = skuEl.value.trim();
   var qty = parseInt(qtyEl.value) || 0;
-  if (!sku || qty <= 0) { msgEl.innerHTML = '<span class="text-danger">填写 SKU 和有效数量</span>'; return; }
+  if (!sku) { msgEl.innerHTML = '<span class="text-danger">请填写 SKU</span>'; return; }
+  if (qty <= 0) { msgEl.innerHTML = '<span class="text-danger">数量必须大于 0</span>'; return; }
 
   var data = itemsData[manualTarget] || [];
-  if (mode === "add") {
-    var found = data.find(function(it){ return it.sku.toUpperCase()===sku.toUpperCase(); });
-    if (found) { found.quantity += qty; }
-    else { data.push({sku:sku, quantity:qty}); }
-    msgEl.innerHTML = '<span class="text-success">添加: '+sku+' +'+qty+'</span>';
-    qtyEl.value = 1;
+  var found = data.find(function(it){ return it.sku.toUpperCase()===sku.toUpperCase(); });
+  if (found) {
+    found.quantity = qty;
+    msgEl.innerHTML = '<span class="text-success">已更新: '+sku+' = '+qty+'</span>';
   } else {
-    var idx = data.findIndex(function(it){ return it.sku.toUpperCase()===sku.toUpperCase(); });
-    if (idx===-1) { msgEl.innerHTML = '<span class="text-warning">未找到: '+sku+'</span>'; return; }
-    data[idx].quantity -= qty;
-    if (data[idx].quantity <= 0) { data.splice(idx,1); msgEl.innerHTML = '<span class="text-success">已删除: '+sku+'</span>'; }
-    else { msgEl.innerHTML = '<span class="text-success">扣减: '+sku+' -'+qty+' (剩 '+data[idx].quantity+')</span>'; }
+    data.push({sku:sku, quantity:qty});
+    msgEl.innerHTML = '<span class="text-success">已添加: '+sku+' +'+qty+'</span>';
   }
+  qtyEl.value = 1;
   renderItems();
 }
 
@@ -417,6 +686,13 @@ function closeModal(id) {
 // ============================================================
 // 初始化
 // ============================================================
-document.addEventListener("DOMContentLoaded", function() { renderItems(); });
+document.addEventListener("DOMContentLoaded", function() { loadSkuVolumes(function() { renderItems(); }); // 阻止头程输入框按 Enter 时提交表单
+document.querySelector("form").addEventListener("keydown", function(e) {
+  if (e.key === "Enter" && e.target.classList.contains("freight-total-input")) {
+    e.preventDefault();
+    // 触发计算但不提交
+    onFreightTotalChange(e.target);
+  }
+}); });
 </script>
 {% endblock %}

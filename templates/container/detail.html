@@ -22,7 +22,7 @@
 <div class="card mb-3">
   <div class="card-header">基本信息
     <div>
-      <a href="{{ url_for('container.edit_container', id=container.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+      <a href="{{ url_for('container.new_container', id=container.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
       <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-sm btn-success">导出 ZIP</a>
       <form method="POST" action="{{ url_for('container.delete_container', id=container.id) }}" style="display:inline;" onsubmit="return confirm('确定删除？');"><button class="btn btn-sm btn-outline-danger">删除</button></form>
     </div>
@@ -109,5 +109,47 @@
   <a href="{{ url_for('container.list_container') }}" class="btn btn-outline-secondary">返回列表</a>
   <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-success">导出 ZIP</a>
 </div>
+
+
+{% block extra_js %}
+<script>
+// SKU 体积数据（由后端注入）
+var _skuVolumes = {};
+{% for sku, info in sku_map.items() %}
+_skuVolumes["{{ sku }}"] = {{ info.volume_m3 }};
+{% endfor %}
+
+function calcDetailFreight(type) {
+  var input = document.querySelector('.freight-detail-input[data-type="' + type + '"]');
+  var totalFreight = parseFloat(input.value) || 0;
+  if (totalFreight <= 0) {
+    document.querySelectorAll('.freight-cell[data-type="' + type + '"]').forEach(function(cell) {
+      cell.textContent = "-";
+    });
+    return;
+  }
+
+  // 计算该类型总方数
+  var totalCbm = 0;
+  var cells = document.querySelectorAll('.freight-cell[data-type="' + type + '"]');
+  cells.forEach(function(cell) {
+    var sku = cell.getAttribute("data-sku");
+    var qty = parseInt(cell.getAttribute("data-qty")) || 0;
+    var vol = _skuVolumes[sku] || 0;
+    totalCbm += vol * qty;
+  });
+
+  if (totalCbm <= 0) return;
+
+  var rate = totalFreight / totalCbm;
+  cells.forEach(function(cell) {
+    var sku = cell.getAttribute("data-sku");
+    var vol = _skuVolumes[sku] || 0;
+    var unitFreight = vol * rate;
+    cell.textContent = "$" + unitFreight.toFixed(4);
+  });
+}
+</script>
+{% endblock %}
 
 {% endblock %}

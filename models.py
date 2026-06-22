@@ -1,4 +1,4 @@
-﻿from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime, timezone
 
@@ -175,3 +175,26 @@ class ActualItem(db.Model):
     )
     sku = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, default=0)
+
+
+
+# ============================================================
+# SKU 产品库
+# 存储每个 SKU 的尺寸、重量和成本信息，用于装柜计算和头程运费分摊
+# ============================================================
+class SkuProduct(db.Model):
+    __tablename__ = "sku_products"
+
+    id = db.Column(db.Integer, primary_key=True)
+    sku = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(200))                           # 品名
+    length = db.Column(db.Float, default=0)                    # 长 (cm)
+    width = db.Column(db.Float, default=0)                     # 宽 (cm)
+    height = db.Column(db.Float, default=0)                    # 高 (cm)
+    gross_weight = db.Column(db.Float, default=0)              # 毛重 (kg)
+    net_weight = db.Column(db.Float, default=0)                # 净重 (kg)
+    unit_cost = db.Column(db.Float, default=0)                 # 采购成本 (元)
+    remarks = db.Column(db.Text)                               # 备注
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc),
+                           onupdate=lambda: datetime.now(timezone.utc))
