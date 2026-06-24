@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+{% block title %}SKU 产品库 — 供应商管理系统{% endblock %}
+{% block page_title %}SKU 产品库{% endblock %}
+
+{% block content %}
+{% macro sort_link(column, label) %}
+            {% set new_dir = 'asc' if sort_by != column else ('desc' if sort_dir == 'asc' else 'asc') %}
+            {% set arrow = '' if sort_by != column else (' ▲' if sort_dir == 'asc' else ' ▼') %}
+            <a href="{{ url_for('sku.list_sku', sort=column, dir=new_dir, keyword=keyword) }}" class="text-decoration-none text-dark">
+              {{ label }}{{ arrow }}
+            </a>
+          {% endmacro %}
+
+<style>
+.sku-checkbox, .sku-select-all { width: 16px; height: 16px; cursor: pointer; accent-color: #1a73e8; }
+.sku-delete-bar { display: none; justify-content: space-between; align-items: center; padding: 6px 12px; background: #e8f0fe; border-radius: 4px; margin-bottom: 8px; }
+.sku-delete-bar.show { display: flex; }
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; align-items: center; justify-content: center; }
+.confirm-box { background: #fff; border-radius: 8px; padding: 24px; width: 380px; max-width: 92vw; box-shadow: 0 8px 32px rgba(0,0,0,0.2); text-align: center; }
+.confirm-box .btn-row { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+</style>
+
+<!-- 操作栏 -->
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('sku.list_sku') }}" class="search-bar">
+      <input type="text" name="keyword" class="form-control" placeholder="搜索 SKU 或品名..."
+             value="{{ keyword or '' }}">
+      <input type="hidden" name="sort" value="{{ sort_by }}">
+      <input type="hidden" name="dir" value="{{ sort_dir }}">
+      <button type="submit" class="btn btn-primary">搜索</button>
+      <a href="{{ url_for('sku.list_sku') }}" class="btn btn-outline-secondary">重置</a>
+      <a href="{{ url_for('sku.list_sku', sort='sku_group', dir='asc') }}" class="btn btn-sm {{ 'btn-primary' if sort_by == 'sku_group' else 'btn-outline-primary' }}">产品分组</a>
+      <a href="{{ url_for('sku.new_sku') }}" class="btn btn-success ms-auto">+ 新增 SKU</a>
+    </form>
+  </div>
+</div>
+
+<!-- 导入导出 -->
+<div class="card mb-3">
+  <div class="card-body d-flex flex-wrap gap-2 align-items-center">
+    <form method="POST" action="{{ url_for('sku.import_sku') }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
+      <input type="file" name="file" accept=".xlsx,.xls" class="form-control form-control-sm" style="width:auto;" required>
+      <button type="submit" class="btn btn-outline-primary btn-sm">导入 Excel</button>
+    </form>
+    <a href="{{ url_for('sku.template_sku') }}" class="btn btn-outline-secondary btn-sm">下载导入模板</a>
+    <a href="{{ url_for('sku.export_sku') }}" class="btn btn-outline-info btn-sm">导出全部</a>
+  </div>
+</div>
+
+<!-- SKU 表格 -->
+<div class="sku-delete-bar" id="skuDeleteBar">
+  <span style="font-size:12px;color:#1a73e8;">已选 <strong id="skuSelectedCount">0</strong> 项</span>
+  <button type="button" class="btn btn-sm btn-danger" id="btnBatchDelete" onclick="handleBatchDelete()">删除选中</button>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th style="width:28px;"><input type="checkbox" class="sku-select-all" id="skuSelectAll" title="全选"></th>
+          <th>{{ sort_link('sku', 'SKU') }}</th>
+          <th>{{ sort_link('name', '品名') }}</th>
+          <th>{{ sort_link('length', '长 (cm)') }}</th>
+          <th>{{ sort_link('width', '宽 (cm)') }}</th>
+          <th>{{ sort_link('height', '高 (cm)') }}</th>
+          <th>{{ sort_link('gross_weight', '毛重 (kg)') }}</th>
+          <th>{{ sort_link('net_weight', '净重 (kg)') }}</th>
+          <th>{{ sort_link('unit_cost', '采购成本 (元)') }}</th>
+          <th>单件体积 (m&sup3;)</th>
+          <th>备注</th>
+          <th class="actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if sku_products %}
+          {% for p in sku_products %}
+          <tr>
+            <td style="text-align:center;"><input type="checkbox" class="sku-checkbox" data-id="{{ p.id }}"></td>
+            <td><strong>{{ p.sku }}</strong></td>
+            <td>{{ p.name or '-' }}</td>
+            <td>{{ p.length if p.length else '-' }}</td>
+            <td>{{ p.width if p.width else '-' }}</td>
+            <td>{{ p.height if p.height else '-' }}</td>
+            <td>{{ p.gross_weight if p.gross_weight else '-' }}</td>
+            <td>{{ p.net_weight if p.net_weight else '-' }}</td>
+            <td>{{ p.unit_cost if p.unit_cost else '-' }}</td>
+            <td>
+              {% set vol = (p.length or 0) * (p.width or 0) * (p.height or 0) / 1000000 %}
+              {{ "%.4f"|format(vol) if vol > 0 else '-' }}
+            </td>
+            <td class="text-muted">{{ p.remarks or '-' }}</td>
+            <td class="actions">
+              <a href="{{ url_for('sku.edit_sku', id=p.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+              <form method="POST" action="{{ url_for('sku.delete_sku', id=p.id) }}" style="display:inline;"
+                    onsubmit="return confirm('确定要删除 SKU {{ p.sku }} 吗？');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="12">
+            <div class="empty-state">
+              <div class="empty-icon">&#128230;</div>
+              <p>{% if keyword %}没有找到匹配的 SKU{% else %}暂无 SKU 数据{% endif %}</p>
+              {% if not keyword %}
+              <a href="{{ url_for('sku.new_sku') }}" class="btn btn-primary">添加第一个 SKU</a>
+              {% endif %}
+            </div>
+          </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <span class="text-muted" style="font-size:13px;">共 <strong>{{ pagination.total if pagination else 0 }}</strong> 条</span>
+        <span class="text-muted" style="font-size:13px;">每页</span>
+        <select class="form-select form-select-sm" style="width:80px;" onchange="changePerPage(this.value)">
+          {% for n in [20, 50, 100, 200] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+        <span class="text-muted" style="font-size:13px;">条</span>
+      </div>
+      {% if pagination and pagination.pages > 1 %}
+      <div class="d-flex align-items-center gap-2">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('sku.list_sku', page=pagination.prev_num, keyword=keyword, sort=sort_by, dir=sort_dir, per_page=per_page) }}">上一页</a></li>
+            {% endif %}
+            {% for p in pagination.iter_pages() %}
+              {% if p %}
+              <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('sku.list_sku', page=p, keyword=keyword, sort=sort_by, dir=sort_dir, per_page=per_page) }}">{{ p }}</a>
+              </li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">...</span></li>
+              {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('sku.list_sku', page=pagination.next_num, keyword=keyword, sort=sort_by, dir=sort_dir, per_page=per_page) }}">下一页</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        <span style="font-size:13px;">第 {{ pagination.page }}/{{ pagination.pages }} 页</span>
+        <span style="font-size:13px;">跳至</span>
+        <input type="number" class="form-control form-control-sm" style="width:60px;" min="1" max="{{ pagination.pages }}" value="{{ pagination.page }}" id="pageJumpInput" onkeydown="if(event.key==='Enter') jumpToPage()">
+        <button class="btn btn-sm btn-outline-secondary" onclick="jumpToPage()">GO</button>
+      </div>
+      {% else %}
+      <span class="text-muted" style="font-size:13px;">第 1/1 页</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+var _deleteConfirmCount = 0;
+var _deleteTargetIds = [];
+
+document.addEventListener("DOMContentLoaded", function() {
+  var selectAll = document.getElementById("skuSelectAll");
+  if (selectAll) {
+    selectAll.addEventListener("change", function() {
+      var checkboxes = document.querySelectorAll(".sku-checkbox");
+      checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+      updateDeleteBar();
+    });
+  }
+  document.querySelectorAll(".sku-checkbox").forEach(function(cb) {
+    cb.addEventListener("change", updateDeleteBar);
+  });
+  updateDeleteBar();
+});
+
+function updateDeleteBar() {
+  var checked = document.querySelectorAll(".sku-checkbox:checked");
+  var count = checked.length;
+  document.getElementById("skuSelectedCount").textContent = count;
+  var bar = document.getElementById("skuDeleteBar");
+  var selectAll = document.getElementById("skuSelectAll");
+  if (count > 0) bar.classList.add("show");
+  else bar.classList.remove("show");
+  var total = document.querySelectorAll(".sku-checkbox").length;
+  if (selectAll) {
+    selectAll.checked = (count === total && total > 0);
+    selectAll.indeterminate = (count > 0 && count < total);
+  }
+}
+
+function getSelectedIds() {
+  var ids = [];
+  document.querySelectorAll(".sku-checkbox:checked").forEach(function(cb) {
+    ids.push(parseInt(cb.getAttribute("data-id")));
+  });
+  return ids;
+}
+
+function handleBatchDelete() {
+  var ids = getSelectedIds();
+  if (ids.length === 0) return;
+  _deleteTargetIds = ids;
+  if (ids.length < 5) showSingleConfirm(ids);
+  else if (ids.length <= 10) { _deleteConfirmCount = 0; showRandomConfirm(); }
+  else showAdminConfirm(ids);
+}
+
+function showSingleConfirm(ids) {
+  var ov = createOverlay("confirmSingle");
+  ov.innerHTML = '<div class="confirm-box">' +
+    '<h5 style="margin-bottom:8px;">确认删除</h5>' +
+    '<p style="color:#5f6368;font-size:14px;">确定要删除选中的 <strong>' + ids.length + '</strong> 个 SKU 吗？此操作不可撤销。</p>' +
+    '<div class="btn-row">' +
+    '<button class="btn btn-danger" id="btnConfirmYes">确认删除</button>' +
+    '<button class="btn btn-outline-secondary" id="btnConfirmNo">取消</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", function(e) { if (e.target === ov) closeOverlay("confirmSingle"); });
+  document.getElementById("btnConfirmYes").addEventListener("click", function() { closeOverlay("confirmSingle"); executeDelete(ids); });
+  document.getElementById("btnConfirmNo").addEventListener("click", function() { closeOverlay("confirmSingle"); });
+}
+
+function showRandomConfirm() {
+  _deleteConfirmCount++;
+  if (_deleteConfirmCount > 5) { executeDelete(_deleteTargetIds); return; }
+  var ov = createOverlay("confirmRandom");
+  var swap = Math.random() > 0.5;
+  var btn1 = swap ? '<button class="btn btn-danger" id="btnRandomDel">确认删除</button>' : '<button class="btn btn-outline-secondary" id="btnRandomCancel">取消</button>';
+  var btn2 = swap ? '<button class="btn btn-outline-secondary" id="btnRandomCancel">取消</button>' : '<button class="btn btn-danger" id="btnRandomDel">确认删除</button>';
+  ov.innerHTML = '<div class="confirm-box">' +
+    '<h5 style="margin-bottom:8px;color:#d93025;">安全确认 (' + _deleteConfirmCount + '/5)</h5>' +
+    '<p style="color:#5f6368;font-size:14px;">确定要删除选中的 <strong>' + _deleteTargetIds.length + '</strong> 个 SKU 吗？请再次确认。</p>' +
+    '<div class="btn-row">' + btn1 + btn2 + '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", function(e) { if (e.target === ov) closeOverlay("confirmRandom"); });
+  var delBtn = document.getElementById("btnRandomDel");
+  var cancelBtn = document.getElementById("btnRandomCancel");
+  if (delBtn) delBtn.addEventListener("click", function() { closeOverlay("confirmRandom"); showRandomConfirm(); });
+  if (cancelBtn) cancelBtn.addEventListener("click", function() { closeOverlay("confirmRandom"); });
+}
+
+function showAdminConfirm(ids) {
+  var ov = createOverlay("confirmAdmin");
+  ov.innerHTML = '<div class="confirm-box">' +
+    '<h5 style="margin-bottom:8px;color:#d93025;">批量删除确认</h5>' +
+    '<p style="color:#5f6368;font-size:14px;">即将删除 <strong>' + ids.length + '</strong> 个 SKU（超过10个），请输入管理员密码确认。</p>' +
+    '<div style="margin-top:12px;">' +
+    '<input type="password" id="adminPasswordInput" class="form-control" placeholder="请输入管理员密码" style="text-align:center;">' +
+    '<p id="pwdError" style="color:#d93025;font-size:12px;margin-top:4px;display:none;">密码错误</p>' +
+    '</div>' +
+    '<div class="btn-row">' +
+    '<button class="btn btn-danger" id="btnAdminConfirm">确认删除</button>' +
+    '<button class="btn btn-outline-secondary" id="btnAdminCancel">取消</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener("click", function(e) { if (e.target === ov) closeOverlay("confirmAdmin"); });
+  document.getElementById("btnAdminConfirm").addEventListener("click", function() {
+    var pwd = document.getElementById("adminPasswordInput").value;
+    if (!pwd) { document.getElementById("pwdError").style.display = "block"; document.getElementById("pwdError").textContent = "请输入密码"; return; }
+    closeOverlay("confirmAdmin");
+    executeDelete(ids, pwd);
+  });
+  document.getElementById("btnAdminCancel").addEventListener("click", function() { closeOverlay("confirmAdmin"); });
+}
+
+function executeDelete(ids, adminPassword) {
+  var payload = { ids: ids };
+  if (adminPassword) payload.admin_password = adminPassword;
+  fetch("/sku/batch-delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    if (data.success) { showToast("已删除 " + data.deleted + " 个 SKU"); setTimeout(function() { location.reload(); }, 800); }
+    else showToast(data.error || "删除失败");
+  })
+  .catch(function() { showToast("网络错误，请重试"); });
+}
+
+function createOverlay(id) {
+  var ov = document.createElement("div");
+  ov.className = "confirm-overlay";
+  if (id) ov.id = id;
+  return ov;
+}
+function closeOverlay(id) { var el = document.getElementById(id); if (el) el.remove(); }
+function showToast(msg) {
+  var el = document.createElement("div");
+  el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;z-index:9999;";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 2000);
+}
+function changePerPage(n) {
+  var url = new URL(window.location.href);
+  url.searchParams.set("per_page", n);
+  url.searchParams.set("page", "1");
+  window.location.href = url.toString();
+}
+function jumpToPage() {
+  var input = document.getElementById("pageJumpInput");
+  var page = parseInt(input.value);
+  var max = parseInt(input.max);
+  if (isNaN(page) || page < 1) page = 1;
+  if (page > max) page = max;
+  var url = new URL(window.location.href);
+  url.searchParams.set("page", page);
+  window.location.href = url.toString();
+}
+</script>
+
+{% endblock %}
