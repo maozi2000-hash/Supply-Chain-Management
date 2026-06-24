@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{% if product %}编辑 SKU{% else %}新增 SKU{% endif %} — 供应商管理系统{% endblock %}
+{% block page_title %}{% if product %}编辑 SKU：{{ product.sku }}{% else %}新增 SKU{% endif %}{% endblock %}
+
+{% block content %}
+
+<div class="card">
+  <div class="card-body">
+    <form method="POST" action="{% if product %}{{ url_for('sku.edit_sku', id=product.id) }}{% else %}{{ url_for('sku.new_sku') }}{% endif %}">
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">SKU <span class="required">*</span></label>
+          <input type="text" name="sku" class="form-control" value="{{ product.sku if product else '' }}" required
+                 placeholder="如：ABC-001" maxlength="100">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">品名</label>
+          <input type="text" name="name" class="form-control" value="{{ product.name if product else '' }}"
+                 placeholder="产品名称" maxlength="200">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">采购成本 (元)</label>
+          <input type="number" name="unit_cost" class="form-control" step="0.01"
+                 value="{{ product.unit_cost if product else '' }}" placeholder="0.00">
+        </div>
+      </div>
+
+      <hr class="my-4">
+      <h6 class="text-muted mb-3">尺寸 (cm)</h6>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">长</label>
+          <input type="number" name="length" class="form-control" step="0.1"
+                 value="{{ product.length if product else '' }}" placeholder="0">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">宽</label>
+          <input type="number" name="width" class="form-control" step="0.1"
+                 value="{{ product.width if product else '' }}" placeholder="0">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">高</label>
+          <input type="number" name="height" class="form-control" step="0.1"
+                 value="{{ product.height if product else '' }}" placeholder="0">
+        </div>
+      </div>
+
+      <hr class="my-4">
+      <h6 class="text-muted mb-3">重量 (kg)</h6>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">毛重</label>
+          <input type="number" name="gross_weight" class="form-control" step="0.01"
+                 value="{{ product.gross_weight if product else '' }}" placeholder="0">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">净重</label>
+          <input type="number" name="net_weight" class="form-control" step="0.01"
+                 value="{{ product.net_weight if product else '' }}" placeholder="0">
+        </div>
+      </div>
+
+      <hr class="my-4">
+      <div class="mb-3">
+        <label class="form-label">备注</label>
+        <textarea name="remarks" class="form-control" rows="2" maxlength="500">{{ product.remarks if product else '' }}</textarea>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">保存</button>
+        <a href="{{ url_for('sku.list_sku') }}" class="btn btn-outline-secondary">取消</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json as _json
 from flask import Flask, render_template
 from flask_login import LoginManager
@@ -60,6 +60,8 @@ def create_app():
 
     from routes.container import container_bp
     app.register_blueprint(container_bp)
+    from routes.sku import sku_bp
+    app.register_blueprint(sku_bp)
 
     # 首页仪表盘
     @app.route("/")
@@ -97,4 +99,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)

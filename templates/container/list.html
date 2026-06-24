@@ -43,7 +43,7 @@
             <td>{{ cr.images|length if cr.images else 0 }}</td>
             <td class="actions">
               <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
-              <a href="{{ url_for('container.edit_container', id=cr.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+              <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
               <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-success">导出</a>
               <form method="POST" action="{{ url_for('container.delete_container', id=cr.id) }}" style="display:inline;"
                     onsubmit="return confirm('确定要删除此装柜记录吗？\n关联图片也将一并删除。');">
