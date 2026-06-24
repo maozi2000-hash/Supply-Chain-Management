@@ -3,7 +3,7 @@ import json as _json
 from flask import Flask, render_template
 from flask_login import LoginManager
 from config import SECRET_KEY, SQLALCHEMY_DATABASE_URI, SQLALCHEMY_TRACK_MODIFICATIONS
-from config import UPLOAD_FOLDER, EXPORT_FOLDER, DATA_DIR
+from config import SQLALCHEMY_ENGINE_OPTIONS, UPLOAD_FOLDER, EXPORT_FOLDER, DATA_DIR
 from models import db, User
 
 
@@ -12,6 +12,7 @@ def create_app():
     app.secret_key = SECRET_KEY
     app.config["SQLALCHEMY_DATABASE_URI"] = SQLALCHEMY_DATABASE_URI
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = SQLALCHEMY_TRACK_MODIFICATIONS
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = SQLALCHEMY_ENGINE_OPTIONS
     app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
     app.config["EXPORT_FOLDER"] = EXPORT_FOLDER
 
@@ -99,4 +100,4 @@ def create_app():
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)

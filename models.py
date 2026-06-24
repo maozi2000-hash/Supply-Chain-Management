@@ -1,8 +1,22 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime, timezone
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 
 db = SQLAlchemy()
+
+
+# 启用外键约束检查（SQLite / libSQL 默认不强制外键）
+# 此监听器对本地 SQLite 和 Turso (libSQL) 均生效
+@event.listens_for(Engine, "connect")
+def _set_foreign_keys_pragma(dbapi_connection, connection_record):
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    except Exception:
+        pass  # 非 SQLite 引擎会忽略
 
 # ============================================================
 # 用户表

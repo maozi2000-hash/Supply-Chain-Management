@@ -5,3 +5,9 @@ openpyxl>=3.1
 pillow>=10.0
 
 gunicorn>=21.2
+
+# Turso / libSQL 云数据库支持
+libsql>=0.1
+
+# 环境变量管理
+python-dotenv>=1.0
