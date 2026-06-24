@@ -16,9 +16,12 @@ sku_bp = Blueprint("sku", __name__, url_prefix="/sku")
 @login_required
 def list_sku():
     page = request.args.get("page", 1, type=int)
+<<<<<<< HEAD
     per_page = request.args.get("per_page", ITEMS_PER_PAGE, type=int)
     if per_page not in (20, 50, 100, 200):
         per_page = ITEMS_PER_PAGE
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     keyword = request.args.get("keyword", "").strip()
     sort_by = request.args.get("sort", "sku_group")
     sort_dir = request.args.get("dir", "asc")
@@ -53,8 +56,13 @@ def list_sku():
 
         # 手动分页
         total = len(sorted_results)
+<<<<<<< HEAD
         start = (page - 1) * per_page
         end = start + per_page
+=======
+        start = (page - 1) * ITEMS_PER_PAGE
+        end = start + ITEMS_PER_PAGE
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
         page_items = sorted_results[start:end]
 
         # 伪造 pagination 对象
@@ -62,9 +70,15 @@ def list_sku():
             def __init__(self):
                 self.items = page_items
                 self.page = page
+<<<<<<< HEAD
                 self.per_page = per_page
                 self.total = total
                 self.pages = (total + per_page - 1) // per_page if total else 1
+=======
+                self.per_page = ITEMS_PER_PAGE
+                self.total = total
+                self.pages = (total + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE if total else 1
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
             def has_prev(self): return self.page > 1
             def has_next(self): return self.page < self.pages
             @property
@@ -99,11 +113,18 @@ def list_sku():
         else:
             query_order = sort_col.desc()
         query = query.order_by(query_order)
+<<<<<<< HEAD
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return render_template(
         "sku/list.html",
         per_page=per_page,
+=======
+        pagination = query.paginate(page=page, per_page=ITEMS_PER_PAGE, error_out=False)
+
+    return render_template(
+        "sku/list.html",
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
         active_menu="sku",
         sku_products=pagination.items,
         keyword=keyword,
@@ -203,6 +224,7 @@ def delete_sku(id):
     return redirect(url_for("sku.list_sku"))
 
 
+<<<<<<< HEAD
 @sku_bp.route("/batch-delete", methods=["POST"])
 def batch_delete_sku():
     """批量删除 SKU，需要管理员密码验证（>10个时）"""
@@ -229,6 +251,8 @@ def batch_delete_sku():
     return jsonify({"success": True, "deleted": deleted})
 
 
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
 # ============================================================
 # AJAX: 按 SKU 查询产品信息（装柜页面调用）
 # ============================================================

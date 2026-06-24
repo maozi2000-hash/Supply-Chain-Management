@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 {# 装柜详情页 #}
+=======
+﻿{# 装柜详情页 #}
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
 {% extends "base.html" %}
 {% block title %}装柜详情 {{ container.container_no }}{% endblock %}
 {% block page_title %}装柜详情：{{ container.container_no }}{% endblock %}
@@ -44,6 +48,7 @@
 <!-- 报关 + 真实 水平两列 -->
 <div class="two-col mb-3">
   <div class="card">
+<<<<<<< HEAD
     <div class="card-header d-flex justify-content-between align-items-center">
       报关数据 ({{ customs_items|length if customs_items else 0 }} 条)
       {% if container.estimated_freight %}
@@ -70,10 +75,23 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('customs','quantity')">数量</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('customs','freight')">单价</button>
       </div>
+=======
+    <div class="card-header">报关数据 ({{ customs_items|length if customs_items else 0 }} 条)</div>
+    <div class="table-responsive">
+      <table class="table items-table">
+        <thead><tr><th>SKU</th><th>数量</th></tr></thead>
+        <tbody>
+          {% if customs_items %}{% for it in customs_items %}<tr><td>{{ it.sku }}</td><td>{{ it.quantity }}</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="2" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
+        </tbody>
+        <tfoot><tr class="total-row"><td class="text-end">合计</td><td>{% set ct=namespace(v=0) %}{% for it in customs_items %}{% set ct.v=ct.v+it.quantity %}{% endfor %}{{ ct.v }}</td></tr></tfoot>
+      </table>
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     </div>
   </div>
 
   <div class="card">
+<<<<<<< HEAD
     <div class="card-header d-flex justify-content-between align-items-center">
       装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)
       {% if container.actual_freight %}
@@ -100,6 +118,18 @@
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('actual','quantity')">数量</button>
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('actual','freight')">单价</button>
       </div>
+=======
+    <div class="card-header">装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)</div>
+    <div class="table-responsive">
+      <table class="table items-table">
+        <thead><tr><th>SKU</th><th>数量</th></tr></thead>
+        <tbody>
+          {% if actual_items %}{% for it in actual_items %}<tr><td>{{ it.sku }}</td><td>{{ it.quantity }}</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="2" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
+        </tbody>
+        <tfoot><tr class="total-row"><td class="text-end">合计</td><td>{% set at=namespace(v=0) %}{% for it in actual_items %}{% set at.v=at.v+it.quantity %}{% endfor %}{{ at.v }}</td></tr></tfoot>
+      </table>
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     </div>
   </div>
 </div>
@@ -122,6 +152,7 @@
 </div>
 
 <!-- 图片 -->
+<<<<<<< HEAD
 {% if images %}
 <div class="card mb-3">
   <div class="card-header">装柜图片 ({{ images|length }} 张)</div>
@@ -142,11 +173,38 @@
 {% block extra_js %}
 <script>
 // SKU 体积数据
+=======
+<div class="card mb-3">
+  <div class="card-header">装柜图片 ({{ images|length if images else 0 }} 张)</div>
+  <div class="card-body">
+    {% if images %}
+    <div class="image-grid">
+      {% for img in images %}
+      <div class="image-item" data-image-full="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}">
+        <img src="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}" alt="{{ img.original_name }}" loading="lazy">
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<div class="empty-state py-3"><p>暂无</p></div>{% endif %}
+  </div>
+</div>
+
+<div class="d-flex gap-2">
+  <a href="{{ url_for('container.list_container') }}" class="btn btn-outline-secondary">返回列表</a>
+  <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-success">导出 ZIP</a>
+</div>
+
+
+{% block extra_js %}
+<script>
+// SKU 体积数据（由后端注入）
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
 var _skuVolumes = {};
 {% for sku, info in sku_map.items() %}
 _skuVolumes["{{ sku }}"] = {{ info.volume_m3 }};
 {% endfor %}
 
+<<<<<<< HEAD
 // 页面加载时根据数据库中的头程总价自动计算
 (function() {
   var freightData = {
@@ -211,4 +269,39 @@ function showImage(src) {
 // 页面加载时自动计算头程
 
 </script>
+=======
+function calcDetailFreight(type) {
+  var input = document.querySelector('.freight-detail-input[data-type="' + type + '"]');
+  var totalFreight = parseFloat(input.value) || 0;
+  if (totalFreight <= 0) {
+    document.querySelectorAll('.freight-cell[data-type="' + type + '"]').forEach(function(cell) {
+      cell.textContent = "-";
+    });
+    return;
+  }
+
+  // 计算该类型总方数
+  var totalCbm = 0;
+  var cells = document.querySelectorAll('.freight-cell[data-type="' + type + '"]');
+  cells.forEach(function(cell) {
+    var sku = cell.getAttribute("data-sku");
+    var qty = parseInt(cell.getAttribute("data-qty")) || 0;
+    var vol = _skuVolumes[sku] || 0;
+    totalCbm += vol * qty;
+  });
+
+  if (totalCbm <= 0) return;
+
+  var rate = totalFreight / totalCbm;
+  cells.forEach(function(cell) {
+    var sku = cell.getAttribute("data-sku");
+    var vol = _skuVolumes[sku] || 0;
+    var unitFreight = vol * rate;
+    cell.textContent = "$" + unitFreight.toFixed(4);
+  });
+}
+</script>
+{% endblock %}
+
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
 {% endblock %}

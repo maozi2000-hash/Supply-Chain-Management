@@ -8,7 +8,10 @@ from flask import (
     send_file, jsonify, current_app,
 )
 from flask_login import login_required
+<<<<<<< HEAD
 import re
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
 from models import db, Order, BookingRecord, ContainerRecord, ContainerImage, CustomsItem, ActualItem, OrderItem
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -111,11 +114,15 @@ def list_container():
 @container_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new_container():
+<<<<<<< HEAD
     container_id = request.args.get("id", type=int)
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     orders = Order.query.order_by(Order.created_at.desc()).all()
     bookings = BookingRecord.query.order_by(db.desc(BookingRecord.id)).all()
     selected_order_id = request.args.get("order_id", "")
 
+<<<<<<< HEAD
     # 加载 SKU 体积缓存（传给前端内嵌，避免异步）
     from models import SkuProduct
     all_skus = SkuProduct.query.all()
@@ -181,18 +188,48 @@ def new_container():
         zip_file = request.files.get("image_zip")
         if zip_file and zip_file.filename:
             saved, err = _extract_zip_images(container_obj, zip_file)
+=======
+    if request.method == "POST":
+        container = _build_container_from_form(request, None)
+        if container is None:
+            return render_template(
+                "container/form.html", active_menu="container", container=None,
+                orders=orders, bookings=bookings, selected_order_id=selected_order_id,
+                synced_items=None,
+            )
+
+        # 检查是否已有相同柜号（防止 debug reloader 重复提交）
+        existing = ContainerRecord.query.filter_by(container_no=container.container_no).first()
+        if existing:
+            flash("柜号 " + container.container_no + " 已存在", "warning")
+            return redirect(url_for("container.container_detail", id=existing.id))
+
+        db.session.add(container)
+        db.session.flush()
+
+        zip_file = request.files.get("image_zip")
+        if zip_file and zip_file.filename:
+            saved, err = _extract_zip_images(container, zip_file)
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
             if err:
                 flash(err, "warning")
 
         customs_json = request.form.get("customs_json", "[]")
         actual_json = request.form.get("actual_json", "[]")
+<<<<<<< HEAD
         _save_items(container_obj, customs_json, actual_json)
 
         order = db.session.get(Order, container_obj.order_id)
+=======
+        _save_items(container, customs_json, actual_json)
+
+        order = db.session.get(Order, container.order_id)
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
         if order and order.status not in ("装柜完成", "已取消"):
             order.status = "装柜完成"
 
         db.session.commit()
+<<<<<<< HEAD
         flash("装柜记录已更新" if not is_new else "装柜记录创建成功", "success")
         return redirect(url_for("container.container_detail", id=container_obj.id))
 
@@ -203,14 +240,26 @@ def new_container():
         actual_data = [{"sku": ai.sku, "quantity": ai.quantity} for ai in container.actual_items]
         synced_items = {"customs": customs_data, "actual": actual_data}
     elif selected_order_id:
+=======
+        flash("装柜记录创建成功", "success")
+        return redirect(url_for("container.container_detail", id=container.id))
+
+    synced_items = None
+    if selected_order_id:
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
         order = db.session.get(Order, int(selected_order_id))
         if order:
             synced_items = [{"sku": oi.sku, "quantity": oi.quantity} for oi in order.items]
 
     return render_template(
+<<<<<<< HEAD
         "container/form.html", active_menu="container", container=container,
         orders=orders, bookings=bookings, selected_order_id=selected_order_id,
         sku_volume_map=sku_volume_map, sku_weight_map=sku_weight_map, sku_cost_map=sku_cost_map,
+=======
+        "container/form.html", active_menu="container", container=None,
+        orders=orders, bookings=bookings, selected_order_id=selected_order_id,
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
         synced_items=synced_items,
     )
 
@@ -244,6 +293,7 @@ def container_detail(id):
             "unit_cost": sp.unit_cost or 0,
         }
 
+<<<<<<< HEAD
     # 对于有 -A/-B/-C 后缀的 SKU，计算同组平均成本
     group_costs = {}
     for sku_key, info in sku_map.items():
@@ -261,6 +311,8 @@ def container_detail(id):
                 if m2 and m2.group(1) == base:
                     info["unit_cost"] = round(avg, 4)
 
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     return render_template(
         "container/detail.html", active_menu="container",
         container=container, images=images,
@@ -476,8 +528,11 @@ def _build_container_from_form(req, existing):
     cargo_count = req.form.get("cargo_count", 0, type=int)
     weight = req.form.get("weight", 0, type=float)
     volume = req.form.get("volume", 0, type=float)
+<<<<<<< HEAD
     estimated_freight = req.form.get("estimated_freight", 0, type=float)
     actual_freight = req.form.get("actual_freight", 0, type=float)
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     remarks = req.form.get("remarks", "").strip()
 
     if not order_id or not container_no:
@@ -492,8 +547,11 @@ def _build_container_from_form(req, existing):
         existing.cargo_count = cargo_count
         existing.weight = weight
         existing.volume = volume
+<<<<<<< HEAD
         existing.estimated_freight = estimated_freight
         existing.actual_freight = actual_freight
+=======
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
         existing.remarks = remarks
         return existing
 
@@ -501,9 +559,13 @@ def _build_container_from_form(req, existing):
         order_id=order_id, booking_id=booking_id,
         container_no=container_no,
         loading_date=datetime.strptime(loading_date, "%Y-%m-%d").date() if loading_date else None,
+<<<<<<< HEAD
         cargo_count=cargo_count, weight=weight, volume=volume,
         estimated_freight=estimated_freight, actual_freight=actual_freight,
         remarks=remarks,
+=======
+        cargo_count=cargo_count, weight=weight, volume=volume, remarks=remarks,
+>>>>>>> c26341a738934a24e8a8eb6787eb9988aac4ab69
     )
 
 
