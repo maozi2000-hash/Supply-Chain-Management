@@ -18,3 +18,6 @@ MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
 
 # 分页
 ITEMS_PER_PAGE = 15
+
+# 管理员密码（批量删除等敏感操作）
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")

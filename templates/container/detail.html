@@ -1,4 +1,4 @@
-﻿{# 装柜详情页 #}
+{# 装柜详情页 #}
 {% extends "base.html" %}
 {% block title %}装柜详情 {{ container.container_no }}{% endblock %}
 {% block page_title %}装柜详情：{{ container.container_no }}{% endblock %}
@@ -22,7 +22,7 @@
 <div class="card mb-3">
   <div class="card-header">基本信息
     <div>
-      <a href="{{ url_for('container.edit_container', id=container.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+      <a href="{{ url_for('container.new_container', id=container.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
       <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-sm btn-success">导出 ZIP</a>
       <form method="POST" action="{{ url_for('container.delete_container', id=container.id) }}" style="display:inline;" onsubmit="return confirm('确定删除？');"><button class="btn btn-sm btn-outline-danger">删除</button></form>
     </div>
@@ -44,30 +44,62 @@
 <!-- 报关 + 真实 水平两列 -->
 <div class="two-col mb-3">
   <div class="card">
-    <div class="card-header">报关数据 ({{ customs_items|length if customs_items else 0 }} 条)</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      报关数据 ({{ customs_items|length if customs_items else 0 }} 条)
+      {% if container.estimated_freight %}
+      <span style="font-size:12px;font-weight:400;color:#0d904f;">预估总价 ${{ '%.2f'|format(container.estimated_freight) }}</span>
+      {% endif %}
+    </div>
     <div class="table-responsive">
       <table class="table items-table">
-        <thead><tr><th>SKU</th><th>数量</th></tr></thead>
+        <thead><tr><th>SKU</th><th>数量</th><th>产品单价</th><th>预估单价</th></tr></thead>
         <tbody>
-          {% if customs_items %}{% for it in customs_items %}<tr><td>{{ it.sku }}</td><td>{{ it.quantity }}</td></tr>{% endfor %}
-          {% else %}<tr><td colspan="2" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
+          {% if customs_items %}{% for it in customs_items %}
+          {% set sp = sku_map.get(it.sku, {}) %}
+          <tr><td>{{ it.sku }}{% if sp.name %} <small class="text-muted">({{ sp.name }})</small>{% endif %}</td>
+          <td>{{ it.quantity }}</td>
+          <td>{% if sp.unit_cost %}&yen;{{ "%.2f"|format(sp.unit_cost) }}{% else %}-{% endif %}</td>
+          <td class="freight-cell" data-sku="{{ it.sku }}" data-qty="{{ it.quantity }}" data-type="customs">-</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="4" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
         </tbody>
-        <tfoot><tr class="total-row"><td class="text-end">合计</td><td>{% set ct=namespace(v=0) %}{% for it in customs_items %}{% set ct.v=ct.v+it.quantity %}{% endfor %}{{ ct.v }}</td></tr></tfoot>
+        <tfoot><tr class="total-row"><td class="text-end">合计</td><td></td><td></td><td>{% set ct=namespace(v=0) %}{% for it in customs_items %}{% set ct.v=ct.v+it.quantity %}{% endfor %}{{ ct.v }}</td><td></td></tr></tfoot>
       </table>
+      <div class="copy-bar" style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <span class="text-muted" style="font-size:11px;">复制：</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('customs','sku')">SKU</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('customs','quantity')">数量</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('customs','freight')">单价</button>
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-header">装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)
+      {% if container.actual_freight %}
+      <span style="font-size:12px;font-weight:400;color:#0d904f;">实际总价 ${{ '%.2f'|format(container.actual_freight) }}</span>
+      {% endif %}
+    </div>
     <div class="table-responsive">
       <table class="table items-table">
-        <thead><tr><th>SKU</th><th>数量</th></tr></thead>
+        <thead><tr><th>SKU</th><th>数量</th><th>产品单价</th><th>实际单价</th></tr></thead>
         <tbody>
-          {% if actual_items %}{% for it in actual_items %}<tr><td>{{ it.sku }}</td><td>{{ it.quantity }}</td></tr>{% endfor %}
-          {% else %}<tr><td colspan="2" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
+          {% if actual_items %}{% for it in actual_items %}
+          {% set sp = sku_map.get(it.sku, {}) %}
+          <tr><td>{{ it.sku }}{% if sp.name %} <small class="text-muted">({{ sp.name }})</small>{% endif %}</td>
+          <td>{{ it.quantity }}</td>
+          <td>{% if sp.unit_cost %}&yen;{{ "%.2f"|format(sp.unit_cost) }}{% else %}-{% endif %}</td>
+          <td class="freight-cell" data-sku="{{ it.sku }}" data-qty="{{ it.quantity }}" data-type="actual">-</td></tr>{% endfor %}
+          {% else %}<tr><td colspan="4" class="text-muted text-center py-2">暂无</td></tr>{% endif %}
         </tbody>
-        <tfoot><tr class="total-row"><td class="text-end">合计</td><td>{% set at=namespace(v=0) %}{% for it in actual_items %}{% set at.v=at.v+it.quantity %}{% endfor %}{{ at.v }}</td></tr></tfoot>
+        <tfoot><tr class="total-row"><td class="text-end">合计</td><td></td><td>{% set at=namespace(v=0) %}{% for it in actual_items %}{% set at.v=at.v+it.quantity %}{% endfor %}{{ at.v }}</td><td></td></tr></tfoot>
       </table>
+      <div class="copy-bar" style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+        <span class="text-muted" style="font-size:11px;">复制：</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('actual','sku')">SKU</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('actual','quantity')">数量</button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyDetailColumn('actual','freight')">单价</button>
+      </div>
     </div>
   </div>
 </div>
@@ -90,24 +122,93 @@
 </div>
 
 <!-- 图片 -->
+{% if images %}
 <div class="card mb-3">
-  <div class="card-header">装柜图片 ({{ images|length if images else 0 }} 张)</div>
+  <div class="card-header">装柜图片 ({{ images|length }} 张)</div>
   <div class="card-body">
-    {% if images %}
     <div class="image-grid">
       {% for img in images %}
-      <div class="image-item" data-image-full="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}">
-        <img src="{{ url_for('static', filename='uploads/' + img.file_path) if not img.file_path.startswith('uploads/') else url_for('static', filename=img.file_path) }}" alt="{{ img.original_name }}" loading="lazy">
+      <div class="image-item" onclick="showImage('{{ url_for('static', filename='../uploads/' + img.file_path) }}')">
+        <img src="{{ url_for('static', filename='../uploads/' + img.file_path) }}" alt="{{ img.original_name }}" loading="lazy">
       </div>
       {% endfor %}
     </div>
-    {% else %}<div class="empty-state py-3"><p>暂无</p></div>{% endif %}
   </div>
 </div>
+{% endif %}
 
-<div class="d-flex gap-2">
-  <a href="{{ url_for('container.list_container') }}" class="btn btn-outline-secondary">返回列表</a>
-  <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-success">导出 ZIP</a>
-</div>
+{% endblock %}
 
+{% block extra_js %}
+<script>
+// SKU 体积数据
+var _skuVolumes = {};
+{% for sku, info in sku_map.items() %}
+_skuVolumes["{{ sku }}"] = {{ info.volume_m3 }};
+{% endfor %}
+
+// 页面加载时根据数据库中的头程总价自动计算
+(function() {
+  var freightData = {
+    customs: {{ container.estimated_freight or 0 }},
+    actual: {{ container.actual_freight or 0 }}
+  };
+  for (var type in freightData) {
+    var totalFreight = freightData[type];
+    if (totalFreight <= 0) continue;
+    var totalCbm = 0;
+    var cells = document.querySelectorAll('.freight-cell[data-type="' + type + '"]');
+    cells.forEach(function(cell) {
+      var sku = cell.getAttribute("data-sku");
+      var qty = parseInt(cell.getAttribute("data-qty")) || 0;
+      var vol = _skuVolumes[sku] || 0;
+      totalCbm += vol * qty;
+    });
+    if (totalCbm <= 0) continue;
+    var rate = totalFreight / totalCbm;
+    cells.forEach(function(cell) {
+      var sku = cell.getAttribute("data-sku");
+      var vol = _skuVolumes[sku] || 0;
+      cell.textContent = "$" + (vol * rate).toFixed(4);
+    });
+  }
+})();
+
+// 图片弹窗
+function copyDetailColumn(type, col) {
+  var cells = document.querySelectorAll('.freight-cell[data-type="' + type + '"]');
+  var vals = [];
+  cells.forEach(function(cell) {
+    var sku = cell.getAttribute("data-sku");
+    var qty = cell.getAttribute("data-qty");
+    if (col === "sku") { vals.push(sku); }
+    else if (col === "quantity") { vals.push(qty); }
+    else if (col === "freight") { vals.push(cell.textContent.replace("$","")); }
+  });
+  navigator.clipboard.writeText(vals.join("\n")).then(function() {
+    showDetailToast("已复制 " + vals.length + " 行");
+  }).catch(function() {
+    showDetailToast("复制失败");
+  });
+}
+
+function showDetailToast(msg) {
+  var el = document.createElement("div");
+  el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;z-index:9999;";
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 2000);
+}
+
+function showImage(src) {
+  var ov = document.createElement("div");
+  ov.className = "image-modal-overlay";
+  ov.innerHTML = '<img src="' + src + '" />';
+  ov.addEventListener("click", function() { ov.remove(); });
+  document.body.appendChild(ov);
+}
+
+// 页面加载时自动计算头程
+
+</script>
 {% endblock %}
