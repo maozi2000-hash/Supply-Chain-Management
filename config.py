@@ -1,4 +1,4 @@
-﻿import os
+import os
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -21,3 +21,7 @@ ITEMS_PER_PAGE = 15
 
 # 管理员密码（批量删除等敏感操作）
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+
+# 批量导入的临时上传目录（每个文件以 uuid token 为名）
+BATCH_TMP_DIR = os.path.join(EXPORT_FOLDER, "_orders_batch_tmp")

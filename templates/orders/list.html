@@ -1,4 +1,4 @@
-﻿{# 订单列表页 #}
+{# 订单列表页 #}
 {% extends "base.html" %}
 {% block title %}订单管理 — 供应商管理系统{% endblock %}
 {% block page_title %}订单管理{% endblock %}
@@ -19,7 +19,11 @@
       </select>
       <button type="submit" class="btn btn-primary">搜索</button>
       <a href="{{ url_for('orders.list_orders') }}" class="btn btn-outline-secondary">重置</a>
-      <a href="{{ url_for('orders.new_order') }}" class="btn btn-success ms-auto">+ 新增订单</a>
+      <div class="ms-auto d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('batchImportModal').classList.add('show');document.body.classList.add('modal-open');">📥 批量导入</button>
+        <a id="btnExportSelected" href="javascript:void(0);" onclick="exportSelectedOrders();" class="btn btn-outline-success disabled" aria-disabled="true">📤 导出所选</a>
+        <a href="{{ url_for('orders.new_order') }}" class="btn btn-success">+ 新增订单</a>
+      </div>
     </form>
   </div>
 </div>
@@ -30,6 +34,7 @@
     <table class="table table-hover">
       <thead>
         <tr>
+          <th style="width:32px;"><input type="checkbox" id="chkAll" onclick="var cbs=document.querySelectorAll('.chk-ord'); cbs.forEach(function(c){c.checked=document.getElementById('chkAll').checked;}); document.dispatchEvent(new Event('chkchange'));" style="cursor:pointer;"></th>
           <th>订单号</th>
           <th>供应商名称</th>
           <th>柜名</th>
@@ -42,6 +47,7 @@
         {% if orders %}
           {% for order in orders %}
           <tr>
+            <td><input type="checkbox" class="chk-ord" value="{{ order.id }}" onclick="document.dispatchEvent(new Event('chkchange'));" style="cursor:pointer;"></td>
             <td>
               <a href="{{ url_for('orders.order_detail', id=order.id) }}">{{ order.order_no }}</a>
             </td>
@@ -60,9 +66,9 @@
           </tr>
           {% endfor %}
         {% else %}
-          <tr><td colspan="7">
+          <tr><td colspan="8">
             <div class="empty-state">
-              <div class="empty-icon">&#128203;</div>
+              <div class="empty-icon">📃</div>
               <p>{% if keyword or current_status %}没有找到匹配的订单{% else %}暂无订单数据{% endif %}</p>
               {% if not keyword and not current_status %}
               <a href="{{ url_for('orders.new_order') }}" class="btn btn-primary">创建第一条订单</a>
@@ -101,4 +107,106 @@
   {% endif %}
 </div>
 
+
+<!-- 批量导入 模态框 -->
+<div class="modal-overlay" id="batchImportModal" onclick="if(event.target===this){this.classList.remove('show');document.body.classList.remove('modal-open');}">
+  <div class="modal-box" style="width:560px;max-width:92vw;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">批量导入订单</h5>
+      <button type="button" class="btn-close" onclick="document.getElementById('batchImportModal').classList.remove('show');document.body.classList.remove('modal-open');"></button>
+    </div>
+    <p class="text-muted small mb-3">
+      支持 <code>.xlsx</code> / <code>.xls</code> 文件，一单多行格式。先下载模板、按格式填写后上传，再选择下方策略——上传后可在预览页查看将要创建/跳过的订单。
+    </p>
+    <form id="batchImportForm" method="POST" action="{{ url_for('orders.batch_import_upload') }}" enctype="multipart/form-data"
+          onsubmit="var s=this.querySelector('button[type=submit]'); if(s){s.disabled=true; s.innerText='上传中…';}">
+      <div class="upload-zone" onclick="document.getElementById('batchFile').click();"
+           style="margin-bottom:14px;">
+        <div class="upload-icon">📄</div>
+        <p class="mb-1">点击选择 Excel 文件，或拖拽到此处</p>
+        <p class="text-muted small mb-0" id="batchFileName">未选择文件</p>
+        <input type="file" id="batchFile" name="file" accept=".xlsx,.xls" hidden
+               onchange="document.getElementById('batchFileName').textContent = this.files[0] ? this.files[0].name : '未选择文件';">
+      </div>
+
+      <fieldset class="mb-3">
+        <legend class="form-label">遇到重复订单号的处理策略</legend>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="strategy" id="stratSkip" value="skip" checked>
+          <label class="form-check-label" for="stratSkip">
+            <strong>跳过重复</strong>（推荐，保留原数据）<br>
+            <span class="text-muted small">已存在的订单号会被忽略，被跳过的订单会在预览页显示。</span>
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="strategy" id="stratOverwrite" value="overwrite">
+          <label class="form-check-label" for="stratOverwrite">
+            <strong>覆盖已有</strong>（删除旧明细、按上传重写）<br>
+            <span class="text-muted small">⚠ 会清空原订单的所有 SKU，并按上传的供应商/柜名/状态/备注覆盖。</span>
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="strategy" id="stratAppend" value="append">
+          <label class="form-check-label" for="stratAppend">
+            <strong>追加明细</strong>（保留原数据、添加新 SKU 行）<br>
+            <span class="text-muted small">订单号/供应商/状态保持不变，仅追加新 SKU 行的明细。</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="d-flex justify-content-between gap-2">
+        <a href="{{ url_for('orders.batch_template') }}" class="btn btn-outline-secondary">📋 下载模板</a>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-outline-secondary"
+                  onclick="document.getElementById('batchImportModal').classList.remove('show');document.body.classList.remove('modal-open');">取消</button>
+          <button type="submit" class="btn btn-primary">上传并预览</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1050;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay.show { display: flex; }
+  body.modal-open { overflow: hidden; }
+  .modal-box {
+    background: #fff; border-radius: 12px; padding: 28px 24px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25); max-height: 90vh; overflow-y: auto;
+  }
+  .btn-close {
+    background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 8px;
+  }
+  fieldset { border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; }
+  legend { font-size: 13px; font-weight: 500; padding: 0 6px; }
+  a.disabled, a[aria-disabled="true"] { pointer-events: none; opacity: 0.55; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function updateExportBtn() {
+  var n = document.querySelectorAll('.chk-ord:checked').length;
+  var btn = document.getElementById('btnExportSelected');
+  if (!btn) return;
+  if (n === 0) {
+    btn.classList.add('disabled');
+    btn.setAttribute('aria-disabled', 'true');
+    btn.innerHTML = '📤 导出所选';
+  } else {
+    btn.classList.remove('disabled');
+    btn.removeAttribute('aria-disabled');
+    btn.innerHTML = '📤 导出所选（' + n + '）';
+  }
+}
+function exportSelectedOrders() {
+  var ids = Array.from(document.querySelectorAll('.chk-ord:checked')).map(function(c){return c.value;});
+  if (ids.length === 0) { alert('请先勾选要导出的订单'); return; }
+  window.location.href = "{{ url_for('orders.batch_export') }}?ids=" + ids.join(',');
+}
+document.addEventListener('chkchange', updateExportBtn);
+</script>
 {% endblock %}

@@ -1,4 +1,4 @@
-﻿{# 仪表盘 #}
+{# 仪表盘 #}
 {% extends "base.html" %}
 {% block title %}仪表盘 — 供应商管理系统{% endblock %}
 {% block page_title %}仪表盘{% endblock %}
@@ -12,15 +12,6 @@
       <div>
         <div class="stat-value">{{ total_orders }}</div>
         <div class="stat-label">订单总数</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-sm-6 col-lg-3">
-    <div class="stat-card">
-      <div class="stat-icon" style="background:#fef7e0;color:#b06000;">&#9881;</div>
-      <div>
-        <div class="stat-value">{{ status_counts.get('生产中', 0) + status_counts.get('生产完成', 0) }}</div>
-        <div class="stat-label">生产中 / 已完成</div>
       </div>
     </div>
   </div>
@@ -89,7 +80,6 @@
       <div class="card-header">快捷操作</div>
       <div class="card-body d-grid gap-2">
         <a href="{{ url_for('orders.new_order') }}" class="btn btn-outline-primary">+ 新增订单</a>
-        <a href="{{ url_for('production.new_production') }}" class="btn btn-outline-primary">+ 创建生产任务</a>
         <a href="{{ url_for('booking.new_booking') }}" class="btn btn-outline-primary">+ 创建订舱记录</a>
         <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-primary">+ 新增装柜记录</a>
       </div>

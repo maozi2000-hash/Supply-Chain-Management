@@ -1,4 +1,4 @@
-﻿{# 订舱新增/编辑表单 — 粘贴识别 + 拖拽模块排序 #}
+{# 订舱新增/编辑表单 — 粘贴识别 + 拖拽模块排序 #}
 {% extends "base.html" %}
 {% block title %}{% if booking %}编辑订舱记录{% else %}创建订舱记录{% endif %} — 供应商管理系统{% endblock %}
 {% block page_title %}{% if booking %}编辑订舱记录{% else %}创建订舱记录{% endif %}{% endblock %}
@@ -41,6 +41,27 @@ body.dragging * { user-select: none !important; }
 <div class="card">
   <div class="card-body">
 
+{% if target_order %}
+      <!-- 订单参考（自动带入，可修改） -->
+      <div class="alert alert-info mb-3" role="alert" style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <strong>📦 当前订单：</strong>
+          <a href="{{ url_for('orders.order_detail', id=target_order.id) }}" target="_blank" class="alert-link">{{ target_order.order_no }}</a>
+          {% if target_order.supplier_name %} · <span class="text-muted">{{ target_order.supplier_name }}</span>{% endif %}
+          {% if target_order.custom_name %} · <span class="text-muted">{{ target_order.custom_name }}</span>{% endif %}
+          <span class="badge badge-status status-{{ target_order.status }}">{{ target_order.status }}</span>
+        </div>
+        {% if pending_orders and pending_orders|length > 1 %}
+          <span class="text-muted small">还有 {{ pending_orders|length - 1 }} 单待填</span>
+        {% endif %}
+      </div>
+{% elif pending_orders %}
+      <div class="alert alert-warning mb-3" role="alert">
+        <strong>⚠ 所有订单都已填完订舱。</strong>
+        <a href="{{ url_for('booking.list_booking') }}" class="alert-link">返回列表</a>
+      </div>
+{% endif %}
+
     <!-- ===== 粘贴识别区 ===== -->
     <div class="paste-area">
       <label class="form-label">粘贴船代订舱信息</label>
@@ -61,12 +82,15 @@ body.dragging * { user-select: none !important; }
         <!-- 模块由 JS 动态渲染，保证顺序可拖拽 -->
       </div>
 
-      <!-- 隐藏的排序字段 -->
+      <!-- 隐藏字段 -->
       <input type="hidden" name="module_order" id="moduleOrder" value="">
+      {% if target_order %}
+        <input type="hidden" name="order_id" value="{{ target_order.id }}">
+      {% endif %}
 
       <div class="mt-4 d-flex gap-2">
         <button type="submit" class="btn btn-primary">
-          {% if booking %}保存修改{% else %}创建订舱记录{% endif %}
+          {% if booking %}保存修改{% else %}创建订舰{% endif %}
         </button>
         <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">返回列表</a>
       </div>
@@ -90,7 +114,6 @@ var MODULE_DEFS = [
   { key: "etd",          label: "开航日期 (ETD)",   type: "date",     required: false, hint: "开航日期" },
   { key: "destination",  label: "目地港",           type: "text",     required: false, hint: "例如 NEW YORK,NY" },
   { key: "cutoff_time",  label: "截单时间",         type: "text",     required: false, hint: "例如 2026-06-10 12:00" },
-  { key: "order_id",     label: "关联订单",         type: "select",   required: true,  hint: "选择关联订单" },
   { key: "status",       label: "状态",             type: "status",   required: false, hint: "订舱状态" },
   { key: "remarks",      label: "备注",             type: "textarea", required: false, hint: "备注信息" },
 ];
@@ -98,7 +121,7 @@ var MODULE_DEFS = [
 // 订单选项（从后端传入）
 var ORDER_OPTIONS = [
   {% for o in orders %}
-  { id: {{ o.id }}, label: "{{ o.order_no }} — {{ o.customer_name }} ({{ o.status }})" }{% if not loop.last %},{% endif %}
+  { id: {{ o.id }}, label: "{{ o.order_no }} — {{ o.supplier_name }}{% if o.custom_name %} ({{ o.custom_name }}){% endif %} [{{ o.status }}]" }{% if not loop.last %},{% endif %}
   {% endfor %}
 ];
 
@@ -111,14 +134,22 @@ var EDIT_DATA = {% if booking %}{
   etd: "{{ booking.etd.strftime('%Y-%m-%d') if booking.etd else '' }}",
   destination: "{{ booking.destination or '' }}",
   cutoff_time: "{{ booking.cutoff_time or '' }}",
-  order_id: "{{ booking.order_id or '' }}",
   status: "{{ booking.status or '待订舱' }}",
   remarks: "{{ booking.remarks or '' }}"
 }{% else %}{
-  status: "待订舱"
+  custom_name: "{{ prefill.custom_name if prefill else '' }}",
+  vessel_voyage: "{{ prefill.vessel_voyage if prefill else '' }}",
+  bl_no: "{{ prefill.bl_no if prefill else '' }}",
+  shipping_company: "{{ prefill.shipping_company if prefill else '' }}",
+  etd: "{{ prefill.etd if prefill else '' }}",
+  destination: "{{ prefill.destination if prefill else '' }}",
+  cutoff_time: "{{ prefill.cutoff_time if prefill else '' }}",
+  status: "{{ prefill.status if prefill else '待订舱' }}",
+  remarks: "{{ prefill.remarks if prefill else '' }}"
 }{% endif %};
 
-var SELECTED_ORDER_ID = "{{ selected_order_id }}";
+// 自动锁定订单 ID（不再显示选择控件）
+var AUTO_ORDER_ID = "{{ target_order.id if target_order else '' }}";
 
 // ============================================================
 // 初始化
@@ -206,21 +237,7 @@ function renderModules(order) {
 
     // 表单控件
     var val = EDIT_DATA[def.key] !== undefined ? EDIT_DATA[def.key] : "";
-    if (def.key === "order_id") {
-      var sel = document.createElement("select");
-      sel.className = "form-select";
-      sel.name = "order_id";
-      sel.id = "field_order_id";
-      sel.innerHTML = '<option value="">— 请选择订单 —</option>';
-      ORDER_OPTIONS.forEach(function(o) {
-        var selected = (String(val) === String(o.id)) ? " selected" : "";
-        if (!val && SELECTED_ORDER_ID && String(o.id) === String(SELECTED_ORDER_ID)) {
-          selected = " selected";
-        }
-        sel.innerHTML += '<option value="' + o.id + '"' + selected + '>' + o.label + '</option>';
-      });
-      card.appendChild(sel);
-    } else if (def.key === "status") {
+    if (def.key === "status") {
       var sel2 = document.createElement("select");
       sel2.className = "form-select";
       sel2.name = "status";

@@ -48,3 +48,4 @@ def logout():
     logout_user()
     flash("已退出登录", "info")
     return redirect(url_for("auth.login"))
+

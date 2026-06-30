@@ -1,4 +1,4 @@
-﻿{# 装柜记录列表页 #}
+{# 装柜记录列表页 — 未填装柜的订单 + 已填装柜的记录 同表展示 #}
 {% extends "base.html" %}
 {% block title %}装柜管理 — 供应商管理系统{% endblock %}
 {% block page_title %}装柜管理{% endblock %}
@@ -16,54 +16,106 @@
     <table class="table table-hover">
       <thead>
         <tr>
+          <th>状态</th>
           <th>订单号</th>
+          <th>供应商</th>
+          <th>柜名</th>
           <th>柜号</th>
           <th>装柜日期</th>
           <th>件数</th>
           <th>毛重(KG)</th>
           <th>体积(CBM)</th>
-          <th>图片数</th>
+          <th>图片</th>
           <th class="actions">操作</th>
         </tr>
       </thead>
       <tbody>
-        {% if container_records %}
-          {% for cr in container_records %}
-          <tr>
-            <td>
-              {% if cr.order %}
-              <a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>
-              {% else %}-{% endif %}
-            </td>
-            <td>{{ cr.container_no }}</td>
-            <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '' }}</td>
-            <td>{{ cr.cargo_count }}</td>
-            <td>{{ '%.2f'|format(cr.weight) if cr.weight else '' }}</td>
-            <td>{{ '%.2f'|format(cr.volume) if cr.volume else '' }}</td>
-            <td>{{ cr.images|length if cr.images else 0 }}</td>
-            <td class="actions">
-              <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
-              <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
-              <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-success">导出</a>
-              <form method="POST" action="{{ url_for('container.delete_container', id=cr.id) }}" style="display:inline;"
-                    onsubmit="return confirm('确定要删除此装柜记录吗？\n关联图片也将一并删除。');">
-                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr><td colspan="8">
-            <div class="empty-state">
-              <div class="empty-icon">&#128230;</div>
-              <p>暂无装柜记录</p>
-              <a href="{{ url_for('container.new_container') }}" class="btn btn-primary">创建第一条装柜记录</a>
-            </div>
-          </td></tr>
+        {# 还没填装柜的订单（灰色行） #}
+        {% for o in pending_orders %}
+        <tr style="background:#fff8e6;">
+          <td><span class="badge bg-warning text-dark">待填装柜</span></td>
+          <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+          <td>{{ o.supplier_name }}</td>
+          <td>{{ o.custom_name or '-' }}</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="actions">
+            <a href="{{ url_for('container.new_container', order_id=o.id) }}" class="btn btn-sm btn-primary">填装柜</a>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {# 已填装柜的记录 #}
+        {% for cr in container_records %}
+        <tr>
+          <td><span class="badge bg-success">已填装柜</span></td>
+          <td>
+            {% if cr.order %}
+            <a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
+          <td>{{ cr.order.custom_name if cr.order else '-' }}</td>
+          <td>{{ cr.container_no }}</td>
+          <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '' }}</td>
+          <td>{{ cr.cargo_count }}</td>
+          <td>{{ '%.2f'|format(cr.weight) if cr.weight else '' }}</td>
+          <td>{{ '%.2f'|format(cr.volume) if cr.volume else '' }}</td>
+          <td>{{ cr.images|length if cr.images else 0 }}</td>
+          <td class="actions">
+            <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+            <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+            <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-success">导出</a>
+            <form method="POST" action="{{ url_for('container.delete_container', id=cr.id) }}" style="display:inline;"
+                  onsubmit="return confirm('确定要删除此装柜记录吗？
+关联图片也将一并删除。');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% if not pending_orders and not container_records %}
+        <tr><td colspan="11">
+          <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <p>暂无订单和装柜记录</p>
+            <a href="{{ url_for('container.new_container') }}" class="btn btn-primary">创建第一条装柜记录</a>
+          </div>
+        </td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
 </div>
+
+{# 分页 #}
+{% if pagination and pagination.pages > 1 %}
+<div class="d-flex justify-content-center mt-3">
+  <nav>
+    <ul class="pagination mb-0">
+      {% if pagination.has_prev %}
+      <li class="page-item"><a class="page-link" href="{{ url_for('container.list_container', page=pagination.prev_num) }}">上一页</a></li>
+      {% endif %}
+      {% for p in pagination.iter_pages() %}
+        {% if p %}
+        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('container.list_container', page=p) }}">{{ p }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+      {% endfor %}
+      {% if pagination.has_next %}
+      <li class="page-item"><a class="page-link" href="{{ url_for('container.list_container', page=pagination.next_num) }}">下一页</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endif %}
 
 {% endblock %}

@@ -1,6 +1,6 @@
 import os
 import io
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required
 from collections import OrderedDict
 import datetime
@@ -111,8 +111,6 @@ def new_order():
         _save_items(order, items_json)
 
         db.session.commit()
-        # 记下刚创建的订单 ID，让订舱/装柜新建页自动预选
-        session['last_created_order_id'] = order.id
         flash("订单创建成功", "success")
         return redirect(url_for("orders.list_orders"))
 

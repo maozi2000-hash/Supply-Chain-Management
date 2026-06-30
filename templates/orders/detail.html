@@ -1,4 +1,4 @@
-﻿{# 订单详情页 #}
+{# 订单详情页 #}
 {% extends "base.html" %}
 {% block title %}订单详情 — {{ order.order_no }}{% endblock %}
 {% block page_title %}订单详情：{{ order.order_no }}{% endblock %}
@@ -100,30 +100,6 @@
         {% endif %}
       {% endfor %}
     </div>
-  </div>
-</div>
-
-<!-- 生产/订舱/装柜 关联表 -->
-<div class="card mb-3">
-  <div class="card-header">生产任务 <a href="{{ url_for('production.new_production', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">+</a></div>
-  <div class="table-responsive">
-    <table class="table table-hover">
-      <thead><tr><th>开始日期</th><th>预计完成</th><th>实际完成</th><th>状态</th><th>备注</th><th class="actions">操作</th></tr></thead>
-      <tbody>
-        {% if production_tasks %}
-          {% for task in production_tasks %}
-          <tr>
-            <td>{{ task.start_date.strftime('%Y-%m-%d') if task.start_date else '' }}</td>
-            <td>{{ task.expected_end_date.strftime('%Y-%m-%d') if task.expected_end_date else '' }}</td>
-            <td>{{ task.actual_end_date.strftime('%Y-%m-%d') if task.actual_end_date else '-' }}</td>
-            <td><span class="badge badge-status status-{{ task.status }}">{{ task.status }}</span></td>
-            <td>{{ task.remarks or '' }}</td>
-            <td class="actions"><a href="{{ url_for('production.edit_production', id=task.id) }}" class="btn btn-sm btn-outline-primary">编辑</a></td>
-          </tr>
-          {% endfor %}
-        {% else %}<tr><td colspan="6"><div class="empty-state py-3"><p class="mb-0">暂无</p></div></td></tr>{% endif %}
-      </tbody>
-    </table>
   </div>
 </div>
 

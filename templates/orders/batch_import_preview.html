@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}批量导入预览 — 供应商管理系统{% endblock %}
+{% block page_title %}批量导入预览{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb mb-0" style="background:transparent;padding:0;">
+    <li class="breadcrumb-item"><a href="{{ url_for('orders.list_orders') }}">订单管理</a></li>
+    <li class="breadcrumb-item active">批量导入预览</li>
+  </ol>
+</nav>
+
+<!-- 顶部汇总 -->
+<div class="row g-3 mb-3">
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card" style="border-left:4px solid #0d904f;">
+      <div class="stat-icon" style="background:#e6f4ea;color:#137333;">✓</div>
+      <div>
+        <div class="stat-value">{{ plan.to_create|length }}</div>
+        <div class="stat-label">将创建订单</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card" style="border-left:4px solid #e6a817;">
+      <div class="stat-icon" style="background:#fef7e0;color:#b06000;">⟳</div>
+      <div>
+        <div class="stat-value">{{ plan.to_overwrite|length + plan.to_append|length }}</div>
+        <div class="stat-label">将影响已有订单</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card" style="border-left:4px solid #5f6368;">
+      <div class="stat-icon" style="background:#f1f3f4;color:#5f6368;">↷</div>
+      <div>
+        <div class="stat-value">{{ plan.to_skip|length }}</div>
+        <div class="stat-label">将跳过（已存在）</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-lg-3">
+    <div class="stat-card" style="border-left:4px solid #d93025;">
+      <div class="stat-icon" style="background:#fce8e6;color:#c5221f;">!</div>
+      <div>
+        <div class="stat-value">{{ line_errors|length + status_warnings|length }}</div>
+        <div class="stat-label">错误/警告</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 策略 + 切换 -->
+<div class="card mb-3">
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('orders.batch_import_preview') }}" class="d-flex gap-3 align-items-center flex-wrap">
+      <strong>当前策略：</strong>
+      {% for code, label in strategies %}
+        <label class="form-check-inline">
+          <input type="radio" name="strategy" value="{{ code }}" class="form-check-input"
+                 {% if strategy == code %}checked{% endif %}
+                 onchange="this.form.submit();"> {{ label }}
+        </label>
+      {% endfor %}
+      <input type="hidden" name="token" value="{{ token }}">
+    </form>
+    <p class="text-muted small mb-0 mt-2">
+      切换策略不会重新上传文件，只是改变「对已存在订单号」的处理方式。
+    </p>
+  </div>
+</div>
+
+<!-- 错误/警告 -->
+{% if line_errors or status_warnings %}
+<div class="card mb-3">
+  <div class="card-header text-danger">解析错误与警告</div>
+  <div class="card-body" style="max-height:240px;overflow-y:auto;">
+    {% if line_errors %}
+      <ul class="mb-2">
+      {% for line_no, msg in line_errors %}
+        <li>行 {{ line_no }}：{{ msg }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+    {% if status_warnings %}
+      <ul class="mb-0">
+      {% for line_no, msg in status_warnings %}
+        <li>行 {{ line_no }}：{{ msg }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- 将创建 -->
+{% if plan.to_create %}
+<div class="card mb-3">
+  <div class="card-header">将创建 {{ plan.to_create|length }} 个订单</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover">
+      <thead><tr><th>订单号</th><th>供应商</th><th>柜名</th><th>状态</th><th>SKU/仓库/数量</th></tr></thead>
+      <tbody>
+        {% for e in plan.to_create %}
+        <tr>
+          <td><strong>{{ e.order_no }}</strong></td>
+          <td>{{ e.meta.supplier_name }}</td>
+          <td>{{ e.meta.custom_name or '-' }}</td>
+          <td><span class="badge badge-status status-{{ e.meta.status }}">{{ e.meta.status }}</span></td>
+          <td>
+            {% if e.sku_items %}
+              {% for sku, wh, qty in e.sku_items %}
+                <div class="small">
+                  <code>{{ sku }}</code>
+                  {% if wh %}<span class="text-muted"> · {{ wh }}</span>{% endif %}
+                  × <strong>{{ qty }}</strong>
+                </div>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted small">（无明细）</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if plan.to_overwrite %}
+<div class="card mb-3" style="border-left:4px solid #e6a817;">
+  <div class="card-header">将覆盖 {{ plan.to_overwrite|length }} 个已有订单（删除旧明细、重写）</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover">
+      <thead><tr><th>订单号</th><th>现有状态</th><th>新状态</th><th>新明细数</th></tr></thead>
+      <tbody>
+        {% for e in plan.to_overwrite %}
+        <tr>
+          <td><strong>{{ e.order_no }}</strong></td>
+          <td><span class="badge badge-status status-{{ e.existing_status }}">{{ e.existing_status }}</span></td>
+          <td><span class="badge badge-status status-{{ e.meta.status }}">{{ e.meta.status }}</span></td>
+          <td>{{ e.sku_items|length }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if plan.to_append %}
+<div class="card mb-3" style="border-left:4px solid #1a73e8;">
+  <div class="card-header">将向 {{ plan.to_append|length }} 个已有订单追加明细（保留原数据）</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover">
+      <thead><tr><th>订单号</th><th>现有明细数</th><th>本次新增 SKU 数</th></tr></thead>
+      <tbody>
+        {% for e in plan.to_append %}
+        <tr>
+          <td><strong>{{ e.order_no }}</strong></td>
+          <td>{{ e.existing_items_count }}</td>
+          <td>{{ e.sku_items|length }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if plan.to_skip %}
+<div class="card mb-3" style="border-left:4px solid #5f6368;">
+  <div class="card-header">将跳过 {{ plan.to_skip|length }} 个已存在订单</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover">
+      <thead><tr><th>订单号</th><th>现有供应商</th><th>现有状态</th></tr></thead>
+      <tbody>
+        {% for e in plan.to_skip %}
+        <tr>
+          <td><strong>{{ e.order_no }}</strong></td>
+          <td>{{ e.existing_supplier }}</td>
+          <td><span class="badge badge-status status-{{ e.existing_status }}">{{ e.existing_status }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- 无可操作 -->
+{% if not plan.to_create and not plan.to_overwrite and not plan.to_append %}
+<div class="card mb-3">
+  <div class="card-body empty-state">
+    <div class="empty-icon">∅</div>
+    <p>当前策略下没有可操作的数据。<br>切换策略或返回上传其他文件。</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- 操作栏 -->
+<div class="card mb-5">
+  <div class="card-body d-flex justify-content-between gap-2">
+    <a href="{{ url_for('orders.list_orders') }}" class="btn btn-outline-secondary">← 返回列表</a>
+    <form method="POST" action="{{ url_for('orders.batch_import_confirm') }}"
+          onsubmit="var s=this.querySelector('button[type=submit]'); s.disabled=true; s.innerText='导入中…';">
+      <input type="hidden" name="token" value="{{ token }}">
+      <input type="hidden" name="strategy" value="{{ strategy }}">
+      <button type="submit" class="btn btn-primary"
+              {% if not (plan.to_create or plan.to_overwrite or plan.to_append) %}disabled{% endif %}>
+        ✓ 确认导入
+      </button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

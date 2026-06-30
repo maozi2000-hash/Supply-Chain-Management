@@ -52,9 +52,6 @@ def create_app():
     from routes.orders import orders_bp
     app.register_blueprint(orders_bp)
 
-    from routes.production import production_bp
-    app.register_blueprint(production_bp)
-
     from routes.booking import booking_bp
     app.register_blueprint(booking_bp)
 

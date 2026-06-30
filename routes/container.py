@@ -1,10 +1,10 @@
-﻿import os
+import os
 import zipfile
 import io
 import json as _json
 from datetime import datetime, timezone
 from flask import (
-    Blueprint, render_template, request, redirect, url_for, flash,
+    Blueprint, render_template, request, redirect, url_for, flash, session,
     send_file, jsonify, current_app,
 )
 from flask_login import login_required
@@ -98,13 +98,21 @@ def _save_items(container, customs_json, actual_json):
 @container_bp.route("/")
 @login_required
 def list_container():
+    """统一列表：未填装柜的订单 + 已填装的装柜记录，一目了然"""
     page = request.args.get("page", 1, type=int)
     pagination = ContainerRecord.query.order_by(db.desc(ContainerRecord.id)).paginate(
         page=page, per_page=15, error_out=False
     )
+    # 还没装柜的订单
+    pending_subq = db.session.query(ContainerRecord.order_id).distinct()
+    pending_orders = Order.query.filter(
+        ~Order.id.in_(pending_subq),
+        Order.status.notin_(["已取消", "装柜完成"])
+    ).order_by(db.desc(Order.created_at)).limit(50).all()
     return render_template(
         "container/list.html", active_menu="container",
         container_records=pagination.items,
+        pagination=pagination,
     )
 
 
@@ -114,7 +122,10 @@ def new_container():
     container_id = request.args.get("id", type=int)
     orders = Order.query.order_by(Order.created_at.desc()).all()
     bookings = BookingRecord.query.order_by(db.desc(BookingRecord.id)).all()
-    selected_order_id = request.args.get("order_id", "")
+
+    target_order_id = request.args.get("order_id") or session.get("last_created_order_id") or ""
+    target_order = db.session.get(Order, int(target_order_id)) if target_order_id else None
+    selected_order_id = str(target_order.id) if target_order else ""
 
     # 加载 SKU 体积缓存（传给前端内嵌，避免异步）
     from models import SkuProduct
@@ -164,7 +175,7 @@ def new_container():
             return render_template(
                 "container/form.html", active_menu="container", container=container,
                 orders=orders, bookings=bookings, selected_order_id=selected_order_id,
-                synced_items=synced_items,
+                                        synced_items=synced_items,
             )
 
         is_new = container is None
@@ -193,6 +204,9 @@ def new_container():
             order.status = "装柜完成"
 
         db.session.commit()
+        # 仅创建时清掉 last_created_order_id 标记；更新不清理
+        if is_new:
+            session.pop("last_created_order_id", None)
         flash("装柜记录已更新" if not is_new else "装柜记录创建成功", "success")
         return redirect(url_for("container.container_detail", id=container_obj.id))
 

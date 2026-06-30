@@ -1,4 +1,4 @@
-﻿{# 装柜记录新增/编辑 #}
+{# 装柜记录新增/编辑 #}
 
 {% extends "base.html" %}
 
@@ -128,23 +128,25 @@
 
       <div class="row g-3">
 
+        {% if target_order %}
+        <!-- 关联订单自动锁定，无需选择 -->
+        <input type="hidden" name="order_id" value="{{ target_order.id }}">
+
         <div class="col-md-6">
-
           <label class="form-label">关联订单 <span class="required">*</span></label>
-
-          <select class="form-select" name="order_id" id="orderSelect" required onchange="onOrderChange()">
-
-            <option value="">-- 请选择 --</option>
-
-            {% for o in orders %}
-
-            <option value="{{ o.id }}" {% if container and container.order_id==o.id %}selected{% endif %} {% if selected_order_id and o.id==selected_order_id|int %}selected{% endif %}>{{ o.order_no }} -- {{ o.supplier_name }}</option>
-
-            {% endfor %}
-
-          </select>
-
+          <input type="text" class="form-control" value="{{ target_order.order_no }} -- {{ target_order.supplier_name }}" readonly disabled style="background:#f5f6fa;">
         </div>
+        {% else %}
+        <div class="col-md-6">
+          <label class="form-label">关联订单 <span class="required">*</span></label>
+          <select class="form-select" name="order_id" id="orderSelect" required>
+            <option value="">-- 请选择 --</option>
+            {% for o in orders %}
+            <option value="{{ o.id }}" {% if container and container.order_id==o.id %}selected{% endif %}>{{ o.order_no }} -- {{ o.supplier_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
 
         <div class="col-md-6">
 
@@ -344,7 +346,7 @@
 
   <div class="d-flex gap-2 mt-3">
 
-    <button type="submit" class="btn btn-primary">{% if container %}保存修改{% else %}创建装柜记录{% endif %}</button>
+    <button type="submit" class="btn btn-primary">{% if container %}保存修改{% else %}创建装柜{% endif %}</button>
 
     <a href="{{ url_for('container.list_container') }}" class="btn btn-outline-secondary">返回列表</a>
 

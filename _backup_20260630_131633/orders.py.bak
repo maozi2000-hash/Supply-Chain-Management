@@ -1,0 +1,659 @@
+import io
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask_login import login_required
+from collections import OrderedDict
+import datetime
+from models import db, Order, OrderItem, BookingRecord, ContainerRecord
+from config import ITEMS_PER_PAGE
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+
+orders_bp = Blueprint("orders", __name__, url_prefix="/orders")
+
+ORDER_STATUS_OPTIONS = [
+    ("下单", "下单"),
+    ("生产中", "生产中"),
+    ("生产完成", "生产完成"),
+    ("订舱中", "订舱中"),
+    ("已订舱", "已订舱"),
+    ("装柜完成", "装柜完成"),
+    ("已取消", "已取消"),
+]
+
+ALL_STATUS_VALUES = [v for v, _ in ORDER_STATUS_OPTIONS]
+
+
+# ============================================================
+# 列表
+# ============================================================
+@orders_bp.route("/")
+@login_required
+def list_orders():
+    page = request.args.get("page", 1, type=int)
+    keyword = request.args.get("keyword", "").strip()
+    current_status = request.args.get("status", "").strip()
+
+    query = Order.query
+
+    if keyword:
+        query = query.filter(
+            db.or_(
+                Order.order_no.contains(keyword),
+                Order.supplier_name.contains(keyword),
+            )
+        )
+
+    if current_status and current_status in ALL_STATUS_VALUES:
+        query = query.filter(Order.status == current_status)
+
+    query = query.order_by(Order.created_at.desc())
+    pagination = query.paginate(page=page, per_page=ITEMS_PER_PAGE, error_out=False)
+
+    return render_template(
+        "orders/list.html",
+        active_menu="orders",
+        orders=pagination.items,
+        status_options=ORDER_STATUS_OPTIONS,
+        current_status=current_status,
+        keyword=keyword,
+        pagination=pagination,
+    )
+
+
+# ============================================================
+# 新增
+# ============================================================
+@orders_bp.route("/new", methods=["GET", "POST"])
+@login_required
+def new_order():
+    if request.method == "POST":
+        order_no = request.form.get("order_no", "").strip()
+        supplier_name = request.form.get("supplier_name", "").strip()
+        custom_name = request.form.get("custom_name", "").strip()
+        status = request.form.get("status", "下单")
+        remarks = request.form.get("remarks", "").strip()
+
+        if not order_no or not supplier_name:
+            flash("订单号和供应商名称不能为空", "error")
+            return render_template(
+                "orders/form.html",
+                active_menu="orders",
+                order=None,
+                items=None,
+                status_options=ORDER_STATUS_OPTIONS,
+            )
+
+        if Order.query.filter_by(order_no=order_no).first():
+            flash(f"订单号 {order_no} 已存在", "error")
+            return render_template(
+                "orders/form.html",
+                active_menu="orders",
+                order=None,
+                items=None,
+                status_options=ORDER_STATUS_OPTIONS,
+            )
+
+        order = Order(
+            order_no=order_no,
+            supplier_name=supplier_name,
+            custom_name=custom_name,
+            status=status,
+            remarks=remarks,
+        )
+        db.session.add(order)
+        db.session.flush()
+
+        # 从表单读取明细数据（JSON）
+        items_json = request.form.get("items_json", "[]")
+        _save_items(order, items_json)
+
+        db.session.commit()
+        flash("订单创建成功", "success")
+        return redirect(url_for("orders.list_orders"))
+
+    return render_template(
+        "orders/form.html",
+        active_menu="orders",
+        order=None,
+        items=None,
+        status_options=ORDER_STATUS_OPTIONS,
+    )
+
+
+# ============================================================
+# 详情
+# ============================================================
+@orders_bp.route("/<int:id>")
+@login_required
+def order_detail(id):
+    order = db.session.get(Order, id)
+    if not order:
+        flash("订单不存在", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    items = order.items
+    total_quantity = sum(it.quantity for it in items)
+    booking_records = order.booking_records.order_by(
+        db.desc(BookingRecord.id)
+    ).all()
+    container_records = order.container_records.order_by(
+        db.desc(ContainerRecord.id)
+    ).all()
+
+    return render_template(
+        "orders/detail.html",
+        active_menu="orders",
+        order=order,
+        items=items,
+        total_quantity=total_quantity,
+        booking_records=booking_records,
+        container_records=container_records,
+    )
+
+
+# ============================================================
+# 编辑
+# ============================================================
+@orders_bp.route("/<int:id>/edit", methods=["GET", "POST"])
+@login_required
+def edit_order(id):
+    order = db.session.get(Order, id)
+    if not order:
+        flash("订单不存在", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    if request.method == "POST":
+        order_no = request.form.get("order_no", "").strip()
+        supplier_name = request.form.get("supplier_name", "").strip()
+        custom_name = request.form.get("custom_name", "").strip()
+        status = request.form.get("status", "下单")
+        remarks = request.form.get("remarks", "").strip()
+
+        if not order_no or not supplier_name:
+            flash("订单号和供应商名称不能为空", "error")
+            return render_template(
+                "orders/form.html",
+                active_menu="orders",
+                order=order,
+                items=order.items,
+                status_options=ORDER_STATUS_OPTIONS,
+            )
+
+        existing = Order.query.filter_by(order_no=order_no).first()
+        if existing and existing.id != order.id:
+            flash(f"订单号 {order_no} 已被使用", "error")
+            return render_template(
+                "orders/form.html",
+                active_menu="orders",
+                order=order,
+                items=order.items,
+                status_options=ORDER_STATUS_OPTIONS,
+            )
+
+        order.order_no = order_no
+        order.supplier_name = supplier_name
+        order.custom_name = custom_name
+        order.status = status
+        order.remarks = remarks
+
+        # 保存明细
+        items_json = request.form.get("items_json", "[]")
+        _save_items(order, items_json)
+
+        db.session.commit()
+        flash("订单更新成功", "success")
+        return redirect(url_for("orders.order_detail", id=order.id))
+
+    items = order.items
+    return render_template(
+        "orders/form.html",
+        active_menu="orders",
+        order=order,
+        items=items,
+        status_options=ORDER_STATUS_OPTIONS,
+    )
+
+
+# ============================================================
+# 删除
+# ============================================================
+@orders_bp.route("/<int:id>/delete", methods=["POST"])
+@login_required
+def delete_order(id):
+    order = db.session.get(Order, id)
+    if not order:
+        flash("订单不存在", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    db.session.delete(order)
+    db.session.commit()
+    flash("订单已删除", "success")
+    return redirect(url_for("orders.list_orders"))
+
+
+# ============================================================
+# 导入 Excel（覆盖替换明细）—— AJAX 接口
+# ============================================================
+@orders_bp.route("/import-items", methods=["POST"])
+@login_required
+def import_items():
+    """上传 Excel，返回解析后的明细 JSON"""
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "请选择文件"}), 400
+
+    try:
+        wb = load_workbook(file, read_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(min_row=2, values_only=True))  # 跳过表头
+    except Exception:
+        return jsonify({"error": "无法读取 Excel 文件，请确认格式正确"}), 400
+
+    items = []
+    errors = []
+    for i, row in enumerate(rows, start=2):
+        if not row or not any(row):
+            continue
+        sku = str(row[0]).strip() if row[0] else ""
+        warehouse = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+        qty_raw = row[2] if len(row) > 2 else 0
+        try:
+            quantity = int(qty_raw) if qty_raw else 0
+        except (ValueError, TypeError):
+            errors.append(f"第{i}行数量格式错误，已跳过")
+            continue
+
+        if not sku:
+            continue
+
+        items.append({"sku": sku, "warehouse": warehouse, "quantity": quantity})
+
+    return jsonify({"items": items, "errors": errors})
+
+
+# ============================================================
+# 导出 Excel —— 下载
+# ============================================================
+@orders_bp.route("/<int:id>/export-items")
+@login_required
+def export_items(id):
+    order = db.session.get(Order, id)
+    if not order:
+        flash("订单不存在", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "订单明细"
+
+    # 表头
+    header_font = Font(bold=True, size=12, color="FFFFFF")
+    header_fill = PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+    for col, h in enumerate(["SKU", "仓库", "数量"], 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for i, item in enumerate(order.items, start=2):
+        ws.cell(row=i, column=1, value=item.sku)
+        ws.cell(row=i, column=2, value=item.warehouse or "")
+        ws.cell(row=i, column=3, value=item.quantity)
+
+    for col_letter in ["A", "B", "C"]:
+        ws.column_dimensions[col_letter].width = 20
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    from flask import send_file
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"订单明细_{order.order_no}.xlsx",
+    )
+
+
+# ============================================================
+# 下载导入模板
+# ============================================================
+@orders_bp.route("/template-items")
+@login_required
+def template_items():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "导入模板"
+
+    header_font = Font(bold=True, size=12, color="FFFFFF")
+    header_fill = PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+    for col, h in enumerate(["SKU", "仓库", "数量"], 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for col_letter in ["A", "B", "C"]:
+        ws.column_dimensions[col_letter].width = 20
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    from flask import send_file
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="订单明细导入模板.xlsx",
+    )
+
+
+# ============================================================
+# 辅助：保存明细
+# ============================================================
+def _save_items(order, items_json):
+    """解析 JSON 格式的明细数据，覆盖替换保存"""
+    import json
+    try:
+        data = json.loads(items_json)
+    except (json.JSONDecodeError, TypeError):
+        data = []
+
+    # 删除旧明细
+    OrderItem.query.filter_by(order_id=order.id).delete()
+
+    # 插入新明细
+    for item_data in data:
+        sku = item_data.get("sku", "").strip()
+        warehouse = item_data.get("warehouse", "").strip()
+        quantity = item_data.get("quantity", 0)
+        if sku:
+            db.session.add(OrderItem(
+                order_id=order.id,
+                sku=sku,
+                warehouse=warehouse,
+                quantity=quantity,
+            ))
+
+
+# ============================================================
+# 批量导入 / 导出 / 模板（多订单 + 多明细）
+# ============================================================
+
+BATCH_TEMPLATE_COLUMNS = [
+    "订单号",       # 必填；同一订单号多行 = 该订单有多个 SKU 明细
+    "供应商名称",   # 必填
+    "柜名",         # 可选
+    "订单状态",     # 可选；不在 ALL_STATUS_VALUES 中则默认 "下单"
+    "备注",         # 可选
+    "SKU",          # 必填（明细行）；无 SKU 的行会被跳过
+    "仓库",         # 可选（明细行）
+    "数量",         # 必填，整数（明细行）
+]
+
+
+@orders_bp.route("/batch-template")
+@login_required
+def batch_template():
+    """下载批量导入的 Excel 模板（一单多行）。"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "批量导入模板"
+
+    header_font = Font(bold=True, size=12, color="FFFFFF")
+    header_fill = PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+    for col, h in enumerate(BATCH_TEMPLATE_COLUMNS, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    # 示例数据：1 个订单 2 个明细 + 1 个订单 1 个明细
+    examples = [
+        ("示例订单001", "测试供应商A", "示例柜", "下单", "演示数据", "SKU001", "默认仓库", 100),
+        ("示例订单001", "测试供应商A", "示例柜", "下单", "演示数据", "SKU002", "次品仓",     200),
+        ("示例订单002", "测试供应商B", "",       "下单", "",        "SKU001", "",           50),
+    ]
+    for r, row in enumerate(examples, start=2):
+        for c, v in enumerate(row, start=1):
+            ws.cell(row=r, column=c, value=v)
+
+    # 列宽
+    widths = [16, 20, 16, 12, 30, 16, 16, 10]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    # 第二张 sheet: 使用说明
+    ws2 = wb.create_sheet("使用说明")
+    notes = [
+        ["字段", "必填", "说明"],
+        ["订单号", "是", "同一订单号可出现多行，每行表示该订单的一个 SKU 明细"],
+        ["供应商名称", "是", ""],
+        ["柜名", "否", "客户/柜名"],
+        ["订单状态", "否", "留空则默认为「下单」；支持的值见右列"],
+        ["备注", "否", ""],
+        ["SKU", "是(明细行)", "无 SKU 的行会被跳过"],
+        ["仓库", "否(明细行)", ""],
+        ["数量", "是(明细行)", "整数；如果不是整数会被截断/报错并跳过该行"],
+        ["", "", ""],
+        ["可用的订单状态", "", "下单 / 生产中 / 生产完成 / 订舱中 / 已订舱 / 装柜完成 / 已取消"],
+        ["重复订单号", "", "已存在的订单号会被跳过，并在结果页提示，请删除对应行后重试"],
+    ]
+    for r, row in enumerate(notes, start=1):
+        for c, v in enumerate(row, start=1):
+            cell = ws2.cell(row=r, column=c, value=v)
+            if r == 1:
+                cell.font = Font(bold=True)
+    ws2.column_dimensions["A"].width = 14
+    ws2.column_dimensions["B"].width = 14
+    ws2.column_dimensions["C"].width = 80
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    from flask import send_file
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="订单批量导入模板.xlsx",
+    )
+
+
+@orders_bp.route("/batch-import", methods=["POST"])
+@login_required
+def batch_import():
+    """批量导入 Excel：每个 (订单号, 供应商) 创建 1 个 Order，按 SKU 多行聚合为明细。"""
+    file = request.files.get("file")
+    if not file or not file.filename:
+        flash("请选择 Excel 文件", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    if not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        flash("仅支持 .xlsx / .xls 文件", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    try:
+        wb = load_workbook(file, read_only=True)
+        ws = wb.active
+        rows = list(ws.iter_rows(min_row=2, values_only=True))
+    except Exception:
+        flash("无法读取 Excel 文件，请确认格式正确", "error")
+        return redirect(url_for("orders.list_orders"))
+
+    # 按 (订单号) 分组聚合
+    grouped = OrderedDict()     # order_no -> { meta: {供应商, 柜名, 状态, 备注}, items: [(sku, wh, qty)] }
+    line_errors = []            # (源文件行号, 原因)
+
+    for i, row in enumerate(rows, start=2):
+        if not row or not any(row):
+            continue
+        order_no = str(row[0]).strip() if len(row) > 0 and row[0] is not None else ""
+        supplier = str(row[1]).strip() if len(row) > 1 and row[1] is not None else ""
+        custom   = str(row[2]).strip() if len(row) > 2 and row[2] is not None else ""
+        status   = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ""
+        remarks  = str(row[4]).strip() if len(row) > 4 and row[4] is not None else ""
+        sku      = str(row[5]).strip() if len(row) > 5 and row[5] is not None else ""
+        warehouse= str(row[6]).strip() if len(row) > 6 and row[6] is not None else ""
+        qty_raw  = row[7] if len(row) > 7 else None
+
+        if not order_no:
+            line_errors.append((i, "订单号为空，已跳过"))
+            continue
+        if not supplier:
+            line_errors.append((i, f"订单 {order_no} 供应商为空，已跳过"))
+            continue
+
+        # 数量
+        try:
+            quantity = int(qty_raw) if qty_raw not in (None, "") else 0
+        except (ValueError, TypeError):
+            line_errors.append((i, f"订单 {order_no} 数量格式错误，已跳过该明细行"))
+            continue
+
+        if sku:  # 仅当有 SKU 才计入明细
+            grp = grouped.setdefault(order_no, {
+                "meta": {"supplier_name": supplier, "custom_name": custom, "status": status or "下单", "remarks": remarks},
+                "items": []
+            })
+            # meta 取第一次出现（同一订单号不同行的元数据应一致）
+            grp["items"].append((sku, warehouse, quantity))
+        else:
+            # 无 SKU 的行：也算订单（meta-only），但仅在该订单号尚未出现时
+            if order_no not in grouped:
+                grouped[order_no] = {
+                    "meta": {"supplier_name": supplier, "custom_name": custom, "status": status or "下单", "remarks": remarks},
+                    "items": []
+                }
+
+    created, skipped, error_count = 0, [], 0
+    for order_no, payload in grouped.items():
+        meta = payload["meta"]
+        # 校验状态值
+        if meta["status"] not in ALL_STATUS_VALUES:
+            line_errors.append((0, f"订单 {order_no} 状态「{meta['status']}」不在允许值范围内，已回退为「下单」"))
+            meta["status"] = "下单"
+            error_count += 1
+
+        if Order.query.filter_by(order_no=order_no).first():
+            skipped.append(order_no)
+            continue
+
+        order = Order(
+            order_no=order_no,
+            supplier_name=meta["supplier_name"],
+            custom_name=meta["custom_name"] or None,
+            status=meta["status"],
+            remarks=meta["remarks"] or None,
+        )
+        db.session.add(order)
+        db.session.flush()  # 让 order.id 生成
+        for sku, wh, qty in payload["items"]:
+            db.session.add(OrderItem(order_id=order.id, sku=sku, warehouse=wh or None, quantity=qty))
+        created += 1
+
+    db.session.commit()
+
+    msg = f"成功创建 {created} 个订单"
+    if skipped:
+        msg += f"；跳过已存在的 {len(skipped)} 个：{', '.join(skipped[:5])}" + ("…" if len(skipped) > 5 else "")
+    if line_errors:
+        # 只显示前 10 条
+        sample = "; ".join([f"行{l}: {r}" if l else r for (l, r) in line_errors[:10]])
+        more = f"（另有 {len(line_errors) - 10} 条提示）" if len(line_errors) > 10 else ""
+        flash(f"{msg}\n导入细节：{sample}{more}", "success" if created else "error")
+    else:
+        flash(msg, "success")
+    return redirect(url_for("orders.list_orders"))
+
+
+@orders_bp.route("/batch-export")
+@login_required
+def batch_export():
+    """按当前筛选条件导出订单列表到 Excel（一单多行格式）。"""
+    keyword = request.args.get("keyword", "").strip()
+    current_status = request.args.get("status", "").strip()
+
+    query = Order.query
+    if keyword:
+        query = query.filter(
+            db.or_(
+                Order.order_no.contains(keyword),
+                Order.supplier_name.contains(keyword),
+            )
+        )
+    if current_status and current_status in ALL_STATUS_VALUES:
+        query = query.filter(Order.status == current_status)
+    orders = query.order_by(Order.created_at.desc()).all()
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "订单批量导出"
+
+    header_font = Font(bold=True, size=12, color="FFFFFF")
+    header_fill = PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+    for col, h in enumerate(BATCH_TEMPLATE_COLUMNS, 1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    row = 2
+    for order in orders:
+        items = order.items
+        if not items:
+            ws.cell(row=row, column=1, value=order.order_no)
+            ws.cell(row=row, column=2, value=order.supplier_name)
+            ws.cell(row=row, column=3, value=order.custom_name or "")
+            ws.cell(row=row, column=4, value=order.status)
+            ws.cell(row=row, column=5, value=order.remarks or "")
+            ws.cell(row=row, column=6, value="")  # 无 SKU
+            ws.cell(row=row, column=7, value="")
+            ws.cell(row=row, column=8, value=0)
+            row += 1
+        else:
+            for it in items:
+                ws.cell(row=row, column=1, value=order.order_no)
+                ws.cell(row=row, column=2, value=order.supplier_name)
+                ws.cell(row=row, column=3, value=order.custom_name or "")
+                ws.cell(row=row, column=4, value=order.status)
+                ws.cell(row=row, column=5, value=order.remarks or "")
+                ws.cell(row=row, column=6, value=it.sku)
+                ws.cell(row=row, column=7, value=it.warehouse or "")
+                ws.cell(row=row, column=8, value=it.quantity)
+                row += 1
+
+    widths = [16, 20, 16, 12, 30, 16, 16, 10]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    # 第二个 sheet：导出说明
+    ws2 = wb.create_sheet("导出说明")
+    notes = [
+        ["导出时间", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        ["导出条件", f"搜索: {keyword or '（无）'}, 状态: {current_status or '全部'}"],
+        ["订单数(去重)", len(orders)],
+        ["导出方式", "一单多行：同一订单号下每个 SKU 明细占一行"],
+        ["", ""],
+        ["提示", "本文件可作为批量导入的输入；如需修改后再次导入，请删除 Sheet「导出说明」"],
+    ]
+    for r, row_data in enumerate(notes, start=1):
+        for c, v in enumerate(row_data, start=1):
+            ws2.cell(row=r, column=c, value=v)
+    ws2.column_dimensions["A"].width = 14
+    ws2.column_dimensions["B"].width = 60
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    from flask import send_file
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=f"订单批量导出_{ts}.xlsx",
+    )

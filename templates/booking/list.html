@@ -1,4 +1,4 @@
-﻿{# 订舱列表页 #}
+{# 订舱列表页 — 未填订舱的订单 + 已填订舱的记录 同表展示 #}
 {% extends "base.html" %}
 {% block title %}订舱管理 — 供应商管理系统{% endblock %}
 {% block page_title %}订舱管理{% endblock %}
@@ -23,150 +23,106 @@
 
 <div class="card">
   <div class="table-responsive">
-    <table class="table table-hover" id="bookingTable">
-      <thead id="bookingTableHead">
+    <table class="table table-hover">
+      <thead>
         <tr>
-          <th data-key="custom_name">柜名</th>
-          <th data-key="order_no">订单号</th>
-          <th data-key="vessel_voyage">航名/航次</th>
-          <th data-key="bl_no">提单号</th>
-          <th data-key="shipping_company">船公司</th>
-          <th data-key="etd">开航日期</th>
-          <th data-key="destination">目地港</th>
-          <th data-key="status">状态</th>
-          <th data-key="actions" class="actions">操作</th>
+          <th>状态</th>
+          <th>订单号</th>
+          <th>供应商</th>
+          <th>柜名</th>
+          <th>航名/航次</th>
+          <th>提单号</th>
+          <th>船公司</th>
+          <th>开航日期</th>
+          <th>目地港</th>
+          <th>订舱状态</th>
+          <th class="actions">操作</th>
         </tr>
       </thead>
-      <tbody id="bookingTableBody">
-        {% if booking_records %}
-          {% for br in booking_records %}
-          <tr>
-            <td data-key="custom_name">{{ br.custom_name or '-' }}</td>
-            <td data-key="order_no">
-              {% if br.order %}
-              <a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>
-              {% else %}-{% endif %}
-            </td>
-            <td data-key="vessel_voyage">{{ br.vessel_voyage or '-' }}</td>
-            <td data-key="bl_no">{{ br.bl_no or '-' }}</td>
-            <td data-key="shipping_company">{{ br.shipping_company or '-' }}</td>
-            <td data-key="etd">{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
-            <td data-key="destination">{{ br.destination or '-' }}</td>
-            <td data-key="status"><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
-            <td data-key="actions" class="actions">
-              <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
-              <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;"
-                    onsubmit="return confirm('确定要删除此订舱记录吗？');">
-                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        {% else %}
-          <tr id="emptyRow"><td colspan="9">
-            <div class="empty-state">
-              <div class="empty-icon">&#9973;</div>
-              <p>暂无订舱记录</p>
-              <a href="{{ url_for('booking.new_booking') }}" class="btn btn-primary">创建第一条订舱记录</a>
-            </div>
-          </td></tr>
+      <tbody>
+        {# 还没填订舱的订单（黄色背景） #}
+        {% for o in pending_orders %}
+        <tr style="background:#fff8e6;">
+          <td><span class="badge bg-warning text-dark">待填订舱</span></td>
+          <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+          <td>{{ o.supplier_name }}</td>
+          <td>{{ o.custom_name or '-' }}</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+          <td class="actions">
+            <a href="{{ url_for('booking.new_booking', order_id=o.id) }}" class="btn btn-sm btn-primary">填订舱</a>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {# 已填订舱的记录 #}
+        {% for br in booking_records %}
+        <tr>
+          <td><span class="badge bg-success">已填订舱</span></td>
+          <td>
+            {% if br.order %}
+            <a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ br.order.supplier_name if br.order else '-' }}</td>
+          <td>{{ br.custom_name or '-' }}</td>
+          <td>{{ br.vessel_voyage or '-' }}</td>
+          <td>{{ br.bl_no or '-' }}</td>
+          <td>{{ br.shipping_company or '-' }}</td>
+          <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+          <td>{{ br.destination or '-' }}</td>
+          <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+          <td class="actions">
+            <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+            <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;"
+                  onsubmit="return confirm('确定要删除此订舱记录吗？');">
+              <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% if not pending_orders and not booking_records %}
+        <tr><td colspan="11">
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <p>暂无订舱记录</p>
+            <a href="{{ url_for('booking.new_booking') }}" class="btn btn-primary">创建第一条订舱记录</a>
+          </div>
+        </td></tr>
         {% endif %}
       </tbody>
     </table>
   </div>
 </div>
 
-{% endblock %}
+{# 分页 #}
+{% if pagination and pagination.pages > 1 %}
+<div class="d-flex justify-content-center mt-3">
+  <nav>
+    <ul class="pagination mb-0">
+      {% if pagination.has_prev %}
+      <li class="page-item"><a class="page-link" href="{{ url_for('booking.list_booking', page=pagination.prev_num, status=current_status) }}">上一页</a></li>
+      {% endif %}
+      {% for p in pagination.iter_pages() %}
+        {% if p %}
+        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('booking.list_booking', page=p, status=current_status) }}">{{ p }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+      {% endfor %}
+      {% if pagination.has_next %}
+      <li class="page-item"><a class="page-link" href="{{ url_for('booking.list_booking', page=pagination.next_num, status=current_status) }}">下一页</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endif %}
 
-{% block extra_js %}
-<script>
-// 列表字段与表单模块 key 的映射
-var LIST_COLUMN_MAP = {
-  custom_name:       { label: '柜名',       group: 'business' },
-  order_no:          { label: '订单号',     group: 'fixed' },
-  vessel_voyage:     { label: '航名/航次',  group: 'business' },
-  bl_no:             { label: '提单号',     group: 'business' },
-  shipping_company:  { label: '船公司',     group: 'business' },
-  etd:               { label: '开航日期',   group: 'business' },
-  destination:       { label: '目地港',     group: 'business' },
-  status:            { label: '状态',       group: 'fixed' },
-  actions:           { label: '操作',       group: 'fixed' },
-};
-
-// 默认的业务列顺序（与 form.html 中 MODULE_DEFS 保持一致）
-var DEFAULT_BUSINESS_ORDER = ['custom_name', 'vessel_voyage', 'bl_no', 'shipping_company', 'etd', 'destination'];
-
-// 固定列（始终在业务列之后）
-var FIXED_ORDER = ['order_no', 'status', 'actions'];
-
-function getBusinessOrder() {
-  try {
-    var saved = localStorage.getItem("booking_module_order");
-    if (saved) {
-      var arr = JSON.parse(saved);
-      // 只提取属于业务列的 key
-      var order = arr
-        .map(function(d) { return d.key; })
-        .filter(function(k) { return DEFAULT_BUSINESS_ORDER.indexOf(k) !== -1; });
-      // 确保所有业务列都在，补上缺失的
-      DEFAULT_BUSINESS_ORDER.forEach(function(k) {
-        if (order.indexOf(k) === -1) { order.push(k); }
-      });
-      return order;
-    }
-  } catch(e) {}
-  return DEFAULT_BUSINESS_ORDER.slice();
-}
-
-function reorderTableColumns() {
-  var businessOrder = getBusinessOrder();
-  // 完整列顺序：order_no + 业务列(按保存顺序) + status + actions
-  var fullOrder = ['order_no'].concat(businessOrder).concat(['status', 'actions']);
-
-  // 重排 thead
-  var thead = document.getElementById("bookingTableHead");
-  if (!thead) return;
-  var headerRow = thead.querySelector("tr");
-  if (!headerRow) return;
-
-  var headerCells = {};
-  headerRow.querySelectorAll("th").forEach(function(th) {
-    headerCells[th.getAttribute("data-key")] = th;
-    th.parentNode.removeChild(th);
-  });
-
-  fullOrder.forEach(function(key) {
-    if (headerCells[key]) {
-      headerRow.appendChild(headerCells[key]);
-    }
-  });
-
-  // 重排 tbody 每一行
-  var tbody = document.getElementById("bookingTableBody");
-  if (!tbody) return;
-  tbody.querySelectorAll("tr").forEach(function(row) {
-    var cells = {};
-    row.querySelectorAll("td").forEach(function(td) {
-      cells[td.getAttribute("data-key")] = td;
-      td.parentNode.removeChild(td);
-    });
-    fullOrder.forEach(function(key) {
-      if (cells[key]) {
-        row.appendChild(cells[key]);
-      }
-    });
-  });
-
-  // 更新空状态行的 colspan
-  var emptyRow = document.getElementById("emptyRow");
-  if (emptyRow) {
-    var colTd = emptyRow.querySelector("td");
-    if (colTd) { colTd.setAttribute("colspan", fullOrder.length); }
-  }
-}
-
-document.addEventListener("DOMContentLoaded", function() {
-  reorderTableColumns();
-});
-</script>
 {% endblock %}
