@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>供应链管理系统 — 启动控制中心</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8f0fe 100%);
+    min-height: 100vh;
+    padding: 24px;
+    color: #202124;
+  }
+  .container { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 24px; margin-bottom: 8px; color: #1a73e8; }
+  .sub { color: #5f6368; font-size: 13px; margin-bottom: 24px; line-height: 1.5; }
+  .card {
+    background: #fff; border-radius: 12px;
+    padding: 20px 24px; margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .card-title {
+    font-size: 14px; font-weight: 600; color: #5f6368;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+  }
+  .card-hint { color: #5f6368; font-size: 12px; margin-bottom: 12px; line-height: 1.5; }
+  .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 16px; }
+  .step { background: #f8f9fa; border-radius: 8px; padding: 12px 14px; border-left: 3px solid #dadce0; }
+  .step.active { border-left-color:#1a73e8; background:#e8f0fe; }
+  .step.done { border-left-color:#0d904f; background:#e6f4ea; }
+  .step-num {
+    display:inline-block; width:22px; height:22px; border-radius:50%;
+    background:#dadce0; color:#5f6368; text-align:center; line-height:22px;
+    font-size:12px; font-weight:600; margin-right:6px;
+  }
+  .step.active .step-num { background:#1a73e8; color:#fff; }
+  .step.done .step-num { background:#0d904f; color:#fff; }
+  .step-name { font-weight:600; font-size:13px; margin-bottom:4px; }
+  .step-desc { font-size:12px; color:#5f6368; line-height:1.4; }
+  .status {
+    display:flex; align-items:center; gap:12px;
+    padding:14px 18px; border-radius:8px; background:#f8f9fa;
+  }
+  .status-dot {
+    width:14px; height:14px; border-radius:50%;
+    background:#ccc; box-shadow:0 0 0 4px rgba(204,204,204,0.2); flex-shrink:0;
+  }
+  .status-dot.running { background:#0d904f; box-shadow:0 0 0 4px rgba(13,144,79,0.2); animation:pulse 1.6s ease-in-out infinite; }
+  .status-dot.down { background:#d93025; box-shadow:0 0 0 4px rgba(217,48,37,0.2); }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.5;} }
+  .status-text { flex:1; font-weight:500; }
+  .status-hint { color:#5f6368; font-size:12px; }
+  .btn-row { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+  .btn {
+    display:block; padding:12px 16px; border-radius:8px;
+    border:1px solid #dadce0; background:#fff; color:#202124;
+    text-decoration:none; text-align:center; font-size:14px;
+    font-weight:500; cursor:pointer; transition:all 0.15s;
+    font-family:inherit; line-height:1.4;
+  }
+  .btn:hover { background:#f8f9fa; border-color:#1a73e8; color:#1a73e8; }
+  .btn.primary { background:#1a73e8; color:#fff; border-color:#1a73e8; }
+  .btn.primary:hover { background:#1557b0; color:#fff; }
+  .btn.success { background:#0d904f; color:#fff; border-color:#0d904f; }
+  .btn.success:hover { background:#0a7340; color:#fff; }
+  .btn.warning { background:#fff; color:#e6a817; border-color:#e6a817; }
+  .btn.warning:hover { background:#fef7e0; color:#b58900; }
+  .btn-grid { display:grid; grid-template-columns: repeat(3,1fr); gap:10px; }
+  @media (max-width:720px) { .steps, .btn-grid { grid-template-columns:1fr; } }
+  .btn-icon { font-size:18px; margin-right:4px; }
+  .btn-sm-text { font-size:11px; opacity:0.85; display:block; font-weight:400; margin-top:2px; }
+  .info-grid {
+    display:grid; grid-template-columns: repeat(2,1fr);
+    gap:12px 24px; font-size:13px;
+  }
+  .info-grid .label { color:#5f6368; }
+  .info-grid .value { font-weight:500; }
+  .ok { color:#0d904f; }
+  .err { color:#d93025; }
+  code { background:#f1f3f4; padding:2px 6px; border-radius:4px; font-size:12px; color:#1a73e8; }
+  .footer { text-align:center; margin-top:32px; font-size:12px; color:#5f6368; line-height:1.6; }
+  .toast {
+    position:fixed; top:20px; right:20px; background:#202124; color:#fff;
+    padding:10px 18px; border-radius:8px; font-size:13px;
+    opacity:0; pointer-events:none; transition:opacity 0.3s; z-index:100;
+  }
+  .toast.show { opacity:1; }
+  /* 隐藏 .bat 内容块 */
+  .hidden-data { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔧 供应链管理系统 · 启动控制中心</h1>
+  <p class="sub">
+    此页面是<strong>离线面板</strong>，所有 <code>.bat</code> 脚本已嵌入 HTML 中（见页面底部）。
+    点击下面按钮 → <strong>下载脚本到本地</strong> → 到下载文件夹双击运行。
+  </p>
+
+  <!-- 启动流程三步图 -->
+  <div class="card">
+    <div class="card-title">启动流程</div>
+    <p class="card-hint">首次运行约需 1-2 分钟（装依赖），之后启动 5 秒。</p>
+    <div class="steps">
+      <div class="step" id="step1">
+        <span class="step-num">1</span>
+        <div class="step-name">安装环境</div>
+        <div class="step-desc">下载 setup.bat 并双击 → 建 venv + 装 Flask。<br>仅第一次需要。</div>
+      </div>
+      <div class="step" id="step2">
+        <span class="step-num">2</span>
+        <div class="step-name">启动服务</div>
+        <div class="step-desc">下载 start.bat 并双击 → 启 Flask + 开浏览器。<br>每天点这个。</div>
+      </div>
+      <div class="step" id="step3">
+        <span class="step-num">3</span>
+        <div class="step-name">使用系统</div>
+        <div class="step-desc">登录后即可用：<br>admin / admin123</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 服务实时状态 -->
+  <div class="card">
+    <div class="card-title">服务状态</div>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <div>
+        <div class="status-text" id="statusText">正在检测...</div>
+        <div class="status-hint" id="statusHint">每 5 秒自动刷新</div>
+      </div>
+      <button class="btn" onclick="checkStatus()">🔄 重新检测</button>
+    </div>
+  </div>
+
+  <!-- 启动 / 安装 -->
+  <div class="card">
+    <div class="card-title">脚本操作</div>
+    <p class="card-hint" id="batHint">
+      项目目录：<code id="batPath">检测中...</code>
+    </p>
+    <div class="btn-row">
+      <button class="btn success" onclick="openDir('setup.bat')">
+        <span class="btn-icon">①</span>首次安装依赖
+        <span class="btn-sm-text">打开目录 → 双击 setup.bat</span>
+      </button>
+      <button class="btn primary" onclick="openDir('start.bat')">
+        <span class="btn-icon">②</span>启动 / 重启服务
+        <span class="btn-sm-text">打开目录 → 双击 start.bat</span>
+      </button>
+      <button class="btn warning" onclick="openDir('stop.bat')">
+        <span class="btn-icon">③</span>停止 Flask 服务
+        <span class="btn-sm-text">打开目录 → 双击 stop.bat</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 快速进入 -->
+  <div class="card">
+    <div class="card-title">快速进入</div>
+    <div class="btn-row">
+      <a class="btn primary" href="http://localhost:5000/login" target="_blank">🔐 登录系统</a>
+      <a class="btn" href="https://github.com/maozi2000-hash/Supply-Chain-Management" target="_blank">📦 查看 GitHub 仓库</a>
+    </div>
+  </div>
+
+  <!-- 环境信息 -->
+  <div class="card">
+    <div class="card-title">环境信息</div>
+    <div class="info-grid">
+      <div><span class="label">项目路径：</span><span class="value" id="infoPath">读取中...</span></div>
+      <div><span class="label">数据库：</span><span class="value">SQLite (data/database.db)</span></div>
+      <div><span class="label">.venv：</span><span class="value" id="infoVenv"><span class="ok">✓ 已创建</span>（看见此行说明 venv 就绪）</span></div>
+      <div><span class="label">服务：</span><span class="value" id="infoService">检测中...</span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <strong>💡 提示：</strong>所有 <code>.bat</code> 文件就在项目目录中，直接在资源管理器双击即可。<br>
+    进阶：把 <code>start.bat</code> 右键 → 创建快捷方式 → 拖到桌面 → 以后每天双击桌面图标就行。
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ============================================================
+     内嵌 .bat 脚本（用户点击按钮会从此处取文本并下载）
+     维护：磁盘上的 .bat 文件是单一数据源；HTML 中保留一份副本
+     同步方式：每次修改 .bat 后手动复制到下面的两个 script 标签中
+============================================================ -->
+<script type="text/x-bat" id="setup-bat">@echo off
+chcp 65001 >nul
+cd /d "%~dp0"
+title 供应链管理系统 - 环境初始化
+
+echo ============================================
+echo   供应链管理系统 - 首次运行初始化
+echo ============================================
+echo.
+
+echo [1/4] 检查 Python 环境...
+where python >nul 2>&1
+if errorlevel 1 (
+  echo [ERROR] 未检测到 python，请先安装 Python 3.10 或更高版本
+  echo 下载地址: https://www.python.org/downloads/
+  pause
+  exit /b 1
+)
+python --version
+echo.
+
+echo [2/4] 创建虚拟环境...
+if exist ".venv\Scripts\python.exe" (
+  echo   .venv 已存在，跳过创建
+) else (
+  python -m venv .venv
+  if errorlevel 1 (
+    echo [ERROR] 创建虚拟环境失败
+    pause
+    exit /b 1
+  )
+  echo   虚拟环境创建成功
+)
+echo.
+
+echo [3/4] 升级 pip...
+.venv\Scripts\python.exe -m pip install --upgrade pip
+echo.
+
+echo [4/4] 安装项目依赖...
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+if errorlevel 1 (
+  echo [ERROR] 依赖安装失败
+  pause
+  exit /b 1
+)
+
+REM 标记已就绪（start.bat 会判断）
+echo. > .venv_exists
+echo. > setup_done.txt
+
+echo.
+echo ============================================
+echo   初始化完成！
+echo.
+echo   下一步：双击 start.bat 启动系统
+echo ============================================
+echo.
+pause
+</script>
+
+<script type="text/x-bat" id="start-bat">@echo off
+chcp 65001 >nul
+cd /d "%~dp0"
+title 供应链管理系统 - 启动
+
+echo ============================================
+echo   供应链管理系统 - 启动服务
+echo ============================================
+echo.
+
+if not exist ".venv\Scripts\python.exe" (
+  echo [ERROR] 未找到虚拟环境 .venv
+  echo 请先双击 setup.bat 完成首次初始化
+  pause
+  exit /b 1
+)
+
+echo [1/3] 检查端口 5000...
+netstat -ano | findstr ":5000" >nul
+if not errorlevel 1 (
+  echo   端口被占用，先尝试停止
+  for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5000"') do (
+    taskkill /PID %%a /F >nul 2>&1
+  )
+  timeout /t 2 /nobreak >nul
+)
+
+echo [2/3] 启动 Flask...
+start "供应链管理系统" /MIN cmd /c ".venv\Scripts\python.exe app.py"
+echo   等待服务就绪...
+timeout /t 4 /nobreak >nul
+
+echo [3/3] 打开浏览器...
+start "" "http://localhost:5000/login"
+
+echo.
+echo ============================================
+echo   服务已启动！
+echo   访问: http://localhost:5000
+echo   账号: admin / admin123
+echo ============================================
+echo.
+timeout /t 6 /nobreak >nul
+</script>
+
+<script type="text/x-bat" id="stop-bat">@echo off
+chcp 65001 >nul
+title 供应链管理系统 - 停止
+
+echo ============================================
+echo   供应链管理系统 - 停止服务
+echo ============================================
+echo.
+
+netstat -ano | findstr ":5000" >nul
+if errorlevel 1 (
+  echo   端口 5000 空闲，无需停止
+  pause
+  exit /b 0
+)
+
+echo 正在停止 5000 端口占用进程...
+for /f "tokens=5" %%a in ('netstat -ano ^| findstr ":5000"') do (
+  echo   停止 PID %%a
+  taskkill /PID %%a /F
+)
+
+echo.
+echo   已停止
+echo ============================================
+echo.
+pause
+</script>
+
+<script>
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  const hint = document.getElementById('statusHint');
+  const infoService = document.getElementById('infoService');
+  const toast = document.getElementById('toast');
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
+  }
+
+  // 检测 Flask 服务（no-cors 绕过 file:// CORS 限制）
+  async function checkStatus() {
+    dot.className = 'status-dot';
+    text.textContent = '检测中...';
+    hint.textContent = '正在访问 http://localhost:5000/api/me';
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 1500);
+      await fetch('http://localhost:5000/api/me', {
+        mode: 'no-cors', signal: ctrl.signal, cache: 'no-store'
+      });
+      clearTimeout(timer);
+      dot.className = 'status-dot running';
+      text.textContent = '● 服务运行中';
+      hint.textContent = '可直接点击下方按钮进入系统';
+      infoService.innerHTML = '<span class="ok">✓ 监听中 (port 5000)</span>';
+      document.getElementById('step3').className = 'step done';
+    } catch (e) {
+      dot.className = 'status-dot down';
+      text.textContent = '● 服务未运行';
+      hint.textContent = '请下载 start.bat 并双击运行';
+      infoService.innerHTML = '<span class="err">未启动</span>';
+      document.getElementById('step3').className = '';
+    }
+  }
+
+  // 项目路径（从 file:// 协议解析）
+  const projectDir = decodeURIComponent(
+    (location.protocol === 'file:' ? location.pathname : '')
+      .replace(/\/[^/]*$/, '').replace(/^\//, '')
+  );
+  const projectDirWin = projectDir.replace(/\//g, '\\');
+
+  // 显示路径
+  document.getElementById('batPath').textContent = projectDirWin || '(未知)';
+  document.getElementById('infoPath').textContent = projectDirWin || '(未知)';
+
+  // 直接跳转到项目文件夹（浏览器会以资源管理器方式打开）
+  function openDir(fileHint) {
+    var dirUrl = 'file:///' + projectDir.replace(/\\/g, '/') + '/';
+    location.href = dirUrl;
+  }
+
+  checkStatus();
+  setInterval(checkStatus, 5000);
+</script>
+</body>
+</html>

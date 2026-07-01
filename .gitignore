@@ -8,3 +8,27 @@ exports/*
 !exports/.gitkeep
 .env
 *.code-workspace
+
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+
+# 日志 / 备份（不入库）
+*.log
+_backup_*/
+backup_*/
+*_backup_*/
+
+# 临时脚本（不入库）
+*.tmp
+*.bak

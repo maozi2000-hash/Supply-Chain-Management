@@ -100,6 +100,22 @@ def edit_booking(id):
         flash("订舰记录不存在", "error")
         return redirect(url_for("booking.list_booking"))
     orders = Order.query.order_by(Order.created_at.desc()).all()
+    pending_subq = db.session.query(BookingRecord.order_id).distinct()
+    pending_orders = Order.query.filter(
+        ~Order.id.in_(pending_subq)
+    ).order_by(db.desc(Order.created_at)).all()
+    target_order = db.session.get(Order, booking.order_id) if booking.order_id else None
+    prefill = {
+        "custom_name": booking.custom_name or "",
+        "vessel_voyage": booking.vessel_voyage or "",
+        "bl_no": booking.bl_no or "",
+        "shipping_company": booking.shipping_company or "",
+        "etd": booking.etd.strftime("%Y-%m-%d") if booking.etd else "",
+        "destination": booking.destination or "",
+        "cutoff_time": booking.cutoff_time or "",
+        "status": booking.status or "待订舱",
+        "remarks": booking.remarks or "",
+    }
     if request.method == "POST":
         booking.custom_name = request.form.get("custom_name", "").strip()
         booking.vessel_voyage = request.form.get("vessel_voyage", "").strip()
@@ -124,6 +140,7 @@ def edit_booking(id):
         flash("订舰记录更新成功", "success")
         return redirect(url_for("booking.list_booking"))
     return render_template("booking/form.html", active_menu="booking", booking=booking, orders=orders,
+                           target_order=target_order, pending_orders=pending_orders, prefill=prefill,
                            selected_order_id=str(booking.order_id) if booking.order_id else "")
 
 

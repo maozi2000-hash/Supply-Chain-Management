@@ -113,6 +113,7 @@ def list_container():
         "container/list.html", active_menu="container",
         container_records=pagination.items,
         pagination=pagination,
+        pending_orders=pending_orders,
     )
 
 
