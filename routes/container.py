@@ -98,22 +98,43 @@ def _save_items(container, customs_json, actual_json):
 @container_bp.route("/")
 @login_required
 def list_container():
-    """统一列表：未填装柜的订单 + 已填装的装柜记录，一目了然"""
+    """统一列表：未填装柜的订单 + 已填装的装柜记录；支持 SKU 搜索（展开用前端 JS）"""
     page = request.args.get("page", 1, type=int)
+    sku_query = (request.args.get("sku") or "").strip()
+
     pagination = ContainerRecord.query.order_by(db.desc(ContainerRecord.id)).paginate(
         page=page, per_page=15, error_out=False
     )
-    # 还没装柜的订单
     pending_subq = db.session.query(ContainerRecord.order_id).distinct()
     pending_orders = Order.query.filter(
         ~Order.id.in_(pending_subq),
         Order.status.notin_(["已取消", "装柜完成"])
     ).order_by(db.desc(Order.created_at)).limit(50).all()
+
+    search_results = []
+    if sku_query:
+        from models import ActualItem
+        matched = ActualItem.query.filter(ActualItem.sku.ilike(f"%{sku_query}%")).all()
+        from collections import OrderedDict
+        agg = OrderedDict()
+        for it in matched:
+            agg.setdefault(it.container_record_id, []).append(it)
+        for cid, items in agg.items():
+            cr = db.session.get(ContainerRecord, cid)
+            if cr:
+                search_results.append({
+                    "container": cr,
+                    "matched_count": len(items),
+                    "matched_items": items,
+                })
+
     return render_template(
         "container/list.html", active_menu="container",
         container_records=pagination.items,
         pagination=pagination,
         pending_orders=pending_orders,
+        sku_query=sku_query,
+        search_results=search_results,
     )
 
 
@@ -228,6 +249,41 @@ def new_container():
         sku_volume_map=sku_volume_map, sku_weight_map=sku_weight_map, sku_cost_map=sku_cost_map,
         synced_items=synced_items,
     )
+
+
+@container_bp.route("/api/container-items/<int:container_id>")
+@login_required
+def api_container_items(container_id):
+    """返回指定柜号所有 actual_items 的 HTML 片段（前端 JS 就地展开调用）
+    keyword 参数：只有匹配关键词的 SKU 才加 sku-match 高亮类
+    """
+    from flask import Response
+    cr = db.session.get(ContainerRecord, container_id)
+    if not cr:
+        return Response("<div class=" + chr(34) + "text-muted p-2" + chr(34) + ">柜号不存在</div>", mimetype="text/html"), 404
+    from models import ActualItem
+    items = ActualItem.query.filter_by(container_record_id=container_id).order_by(ActualItem.id).all()
+    if not items:
+        return Response("<div class=" + chr(34) + "text-muted small p-2" + chr(34) + ">柜号 " + cr.container_no + " 暂无装柜明细</div>", mimetype="text/html")
+    keyword = (request.args.get("keyword") or "").strip().lower()
+    rows = []
+    for idx, it in enumerate(items, start=1):
+        # 仅当 keyword 非空且 SKU 包含 keyword 时才高亮
+        is_match = bool(keyword) and (keyword in it.sku.lower())
+        sku_cell = ("<span class=" + chr(34) + "sku-match" + chr(34) + "><strong>" + it.sku + "</strong></span>") if is_match else it.sku
+        rows.append(
+            "<tr>"
+            "<td class=" + chr(34) + "text-muted" + chr(34) + ">" + str(idx) + "</td>"
+            "<td>" + sku_cell + "</td>"
+            "<td>" + str(it.quantity) + "</td>"
+            "</tr>"
+        )
+    html = (
+        '<div class="table-responsive"><table class="table table-sm mb-0">'
+        '<thead><tr><th style="width:50px;">序号</th><th>SKU</th><th>数量</th></tr></thead>'
+        '<tbody>' + "".join(rows) + '</tbody></table></div>'
+    )
+    return Response(html, mimetype="text/html")
 
 
 @container_bp.route("/<int:id>")

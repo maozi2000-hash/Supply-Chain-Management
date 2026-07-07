@@ -9,10 +9,10 @@ booking_bp = Blueprint("booking", __name__, url_prefix="/booking")
 @booking_bp.route("/")
 @login_required
 def list_booking():
-    """统一列表：未填订舰的订单 + 已填订舰的记录"""
+    """统一列表：未填订舱的订单 + 已填订舱的记录"""
     current_status = request.args.get("status", "").strip()
     query = BookingRecord.query
-    if current_status and current_status in ("待订舰", "已订舰", "已出运"):
+    if current_status and current_status in ("待订舱", "已订舱", "已出运"):
         query = query.filter(BookingRecord.status == current_status)
     pagination = query.order_by(db.desc(BookingRecord.id)).paginate(
         page=request.args.get("page", 1, type=int), per_page=15, error_out=False
@@ -49,11 +49,11 @@ def new_booking():
         "custom_name": target_order.custom_name or "" if target_order else "",
         "vessel_voyage": "", "bl_no": "", "shipping_company": "",
         "etd": "", "destination": "", "cutoff_time": "",
-        "status": "待订舰", "remarks": "",
+        "status": "待订舱", "remarks": "",
     }
     if request.method == "POST":
         order_id = request.form.get("order_id", type=int)
-        status = request.form.get("status", "待订舰")
+        status = request.form.get("status", "待订舱")
         custom_name = request.form.get("custom_name", "").strip()
         vessel_voyage = request.form.get("vessel_voyage", "").strip()
         bl_no = request.form.get("bl_no", "").strip()
@@ -80,13 +80,13 @@ def new_booking():
         db.session.add(br)
         order = db.session.get(Order, order_id)
         if order and order.status in ("下单", "生产中", "生产完成"):
-            if status in ("已订舰", "已出运"):
-                order.status = "已订舰"
+            if status in ("已订舱", "已出运"):
+                order.status = "已订舱"
             else:
-                order.status = "订舰中"
+                order.status = "订舱中"
         db.session.commit()
         session.pop("last_created_order_id", None)
-        flash("订舰记录创建成功", "success")
+        flash("订舱记录创建成功", "success")
         return redirect(url_for("booking.list_booking"))
     return render_template("booking/form.html", active_menu="booking", booking=None, orders=orders,
                            target_order=target_order, pending_orders=pending_orders, prefill=prefill)
@@ -97,7 +97,7 @@ def new_booking():
 def edit_booking(id):
     booking = db.session.get(BookingRecord, id)
     if not booking:
-        flash("订舰记录不存在", "error")
+        flash("订舱记录不存在", "error")
         return redirect(url_for("booking.list_booking"))
     orders = Order.query.order_by(Order.created_at.desc()).all()
     pending_subq = db.session.query(BookingRecord.order_id).distinct()
@@ -126,18 +126,18 @@ def edit_booking(id):
         booking.destination = request.form.get("destination", "").strip()
         booking.cutoff_time = request.form.get("cutoff_time", "").strip()
         booking.order_id = request.form.get("order_id", type=int)
-        booking.status = request.form.get("status", "待订舰")
+        booking.status = request.form.get("status", "待订舱")
         booking.remarks = request.form.get("remarks", "").strip()
         order = db.session.get(Order, booking.order_id)
         if order:
             if booking.status == "已出运" and order.status != "装柜完成":
-                order.status = "已订舰"
-            elif booking.status == "已订舰":
-                order.status = "已订舰"
-            elif order.status not in ("已订舰", "装柜完成", "已出运", "已取消"):
-                order.status = "订舰中"
+                order.status = "已订舱"
+            elif booking.status == "已订舱":
+                order.status = "已订舱"
+            elif order.status not in ("已订舱", "装柜完成", "已出运", "已取消"):
+                order.status = "订舱中"
         db.session.commit()
-        flash("订舰记录更新成功", "success")
+        flash("订舱记录更新成功", "success")
         return redirect(url_for("booking.list_booking"))
     return render_template("booking/form.html", active_menu="booking", booking=booking, orders=orders,
                            target_order=target_order, pending_orders=pending_orders, prefill=prefill,
@@ -149,9 +149,9 @@ def edit_booking(id):
 def delete_booking(id):
     br = db.session.get(BookingRecord, id)
     if not br:
-        flash("订舰记录不存在", "error")
+        flash("订舱记录不存在", "error")
         return redirect(url_for("booking.list_booking"))
     db.session.delete(br)
     db.session.commit()
-    flash("订舰记录已删除", "success")
+    flash("订舱记录已删除", "success")
     return redirect(url_for("booking.list_booking"))

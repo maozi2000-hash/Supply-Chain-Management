@@ -1,63 +1,121 @@
-{# 装柜记录列表页 — 未填装柜的订单 + 已填装柜的记录 同表展示 #}
+{# 装柜记录列表页 #}
 {% extends "base.html" %}
 {% block title %}装柜管理 — 供应商管理系统{% endblock %}
 {% block page_title %}装柜管理{% endblock %}
 
+{% block extra_css %}
+<style>
+  .sku-search-box { background:#fafafa; border:1px solid #e0e0e0; }
+  .sku-search-box .form-control { border-color:#d0d0d0; }
+  .sku-search-box .form-control:focus { border-color:#888; box-shadow:none; }
+  .sku-result-card { border:1px solid #d0d0d0; }
+  .sku-result-card .card-header { background:#f5f5f5; color:#333; border-bottom:1px solid #e0e0e0; font-weight:500; }
+  .sku-match { background:#fff3bf; padding:1px 4px; border-radius:2px; }
+  .keyword-tag { background:#eee; padding:2px 6px; border-radius:3px; font-family:monospace; }
+  .expand-row { background:#fafafa; }
+  .expand-row > td { padding: 8px 16px; }
+</style>
+{% endblock %}
+
 {% block content %}
 
+<div class="card mb-3 sku-search-box">
+  <div class="card-body py-2">
+    <form method="GET" action="{{ url_for('container.list_container') }}" class="d-flex gap-2 align-items-center">
+      <span class="text-muted">SKU</span>
+      <input type="text" name="sku" class="form-control" placeholder="输入 SKU 关键词检索装过的柜号"
+             value="{{ sku_query or '' }}" style="max-width:320px;" autofocus>
+      <button type="submit" class="btn btn-dark btn-sm">搜索</button>
+      {% if sku_query %}
+        <a href="{{ url_for('container.list_container') }}" class="btn btn-link btn-sm text-muted">清空</a>
+      {% endif %}
+      <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-dark btn-sm ms-auto">+ 新增装柜记录</a>
+    </form>
+  </div>
+</div>
+
+{% if sku_query %}
+
+  <div class="card mb-3 sku-result-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>关键词 <span class="keyword-tag">{{ sku_query }}</span> · 匹配 {{ search_results|length }} 个柜号</span>
+    </div>
+    {% if search_results %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>订单号</th>
+            <th>柜号</th>
+            <th>装柜日期</th>
+            <th>供应商</th>
+            <th>件数</th>
+            <th>匹配</th>
+            <th class="actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in search_results %}
+          {% set cr = r.container %}
+          <tr id="row-{{ cr.id }}" data-container-id="{{ cr.id }}">
+            <td>{% if cr.order %}<a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td><strong>{{ cr.container_no }}</strong></td>
+            <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '-' }}</td>
+            <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
+            <td>{{ cr.cargo_count }}</td>
+            <td><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td class="actions">
+              <a href="javascript:void(0);" onclick="toggleContainerItems({{ cr.id }});" class="btn btn-sm btn-outline-dark btn-toggle">展开</a>
+              <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">未找到包含「<span class="keyword-tag">{{ sku_query }}</span>」的柜号</div>
+    {% endif %}
+  </div>
+
+{% else %}
+
 <div class="card mb-3">
-  <div class="card-body d-flex justify-content-end">
-    <a href="{{ url_for('container.new_container') }}" class="btn btn-success">+ 新增装柜记录</a>
+  <div class="card-body d-flex justify-content-end py-2">
+    <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-dark btn-sm">+ 新增装柜记录</a>
   </div>
 </div>
 
 <div class="card">
   <div class="table-responsive">
-    <table class="table table-hover">
+    <table class="table table-hover mb-0">
       <thead>
         <tr>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>柜名</th>
-          <th>柜号</th>
-          <th>装柜日期</th>
-          <th>件数</th>
-          <th>毛重(KG)</th>
-          <th>体积(CBM)</th>
-          <th>图片</th>
+          <th>状态</th><th>订单号</th><th>供应商</th><th>柜名</th>
+          <th>柜号</th><th>装柜日期</th><th>件数</th>
+          <th>毛重(KG)</th><th>体积(CBM)</th><th>图片</th>
           <th class="actions">操作</th>
         </tr>
       </thead>
       <tbody>
-        {# 还没填装柜的订单（灰色行） #}
         {% for o in pending_orders %}
-        <tr style="background:#fff8e6;">
-          <td><span class="badge bg-warning text-dark">待填装柜</span></td>
+        <tr>
+          <td><span class="text-muted">待填装柜</span></td>
           <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
           <td>{{ o.supplier_name }}</td>
           <td>{{ o.custom_name or '-' }}</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
+          <td class="text-muted">-</td><td class="text-muted">-</td><td class="text-muted">-</td>
+          <td class="text-muted">-</td><td class="text-muted">-</td><td class="text-muted">-</td>
           <td class="actions">
-            <a href="{{ url_for('container.new_container', order_id=o.id) }}" class="btn btn-sm btn-primary">填装柜</a>
+            <a href="{{ url_for('container.new_container', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">填装柜</a>
           </td>
         </tr>
         {% endfor %}
 
-        {# 已填装柜的记录 #}
         {% for cr in container_records %}
         <tr>
-          <td><span class="badge bg-success">已填装柜</span></td>
-          <td>
-            {% if cr.order %}
-            <a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>
-            {% else %}-{% endif %}
-          </td>
+          <td><span class="text-muted">已填装柜</span></td>
+          <td>{% if cr.order %}<a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>{% else %}-{% endif %}</td>
           <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
           <td>{{ cr.order.custom_name if cr.order else '-' }}</td>
           <td>{{ cr.container_no }}</td>
@@ -68,12 +126,11 @@
           <td>{{ cr.images|length if cr.images else 0 }}</td>
           <td class="actions">
             <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
-            <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
-            <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-success">导出</a>
-            <form method="POST" action="{{ url_for('container.delete_container', id=cr.id) }}" style="display:inline;"
-                  onsubmit="return confirm('确定要删除此装柜记录吗？
+            <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
+            <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">导出</a>
+            <form method="POST" action="{{ url_for('container.delete_container', id=cr.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此装柜记录吗？
 关联图片也将一并删除。');">
-              <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+              <button type="submit" class="btn btn-sm btn-outline-secondary">删除</button>
             </form>
           </td>
         </tr>
@@ -81,10 +138,9 @@
 
         {% if not pending_orders and not container_records %}
         <tr><td colspan="11">
-          <div class="empty-state">
-            <div class="empty-icon">📦</div>
-            <p>暂无订单和装柜记录</p>
-            <a href="{{ url_for('container.new_container') }}" class="btn btn-primary">创建第一条装柜记录</a>
+          <div class="text-center text-muted py-5">
+            <p class="mb-2">暂无订单和装柜记录</p>
+            <a href="{{ url_for('container.new_container') }}" class="btn btn-sm btn-outline-dark">创建第一条</a>
           </div>
         </td></tr>
         {% endif %}
@@ -93,7 +149,6 @@
   </div>
 </div>
 
-{# 分页 #}
 {% if pagination and pagination.pages > 1 %}
 <div class="d-flex justify-content-center mt-3">
   <nav>
@@ -118,4 +173,61 @@
 </div>
 {% endif %}
 
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if sku_query %}
+<script>
+var CURRENT_EXPANDED = null;
+
+function toggleContainerItems(containerId) {
+  if (CURRENT_EXPANDED !== null && CURRENT_EXPANDED !== containerId) {
+    collapseRow(CURRENT_EXPANDED);
+  }
+  var row = document.getElementById("row-" + containerId);
+  if (!row) return;
+  var next = row.nextElementSibling;
+  if (next && next.classList.contains("expand-row")) {
+    collapseRow(containerId);
+    return;
+  }
+  expandRow(containerId);
+}
+
+function expandRow(containerId) {
+  var row = document.getElementById("row-" + containerId);
+  if (!row) return;
+  var tr = document.createElement("tr");
+  tr.className = "expand-row";
+  tr.id = "expand-" + containerId;
+  var td = document.createElement("td");
+  td.colSpan = 7;
+  td.innerHTML = '<div class="text-muted small p-2">加载中...</div>';
+  tr.appendChild(td);
+  row.parentNode.insertBefore(tr, row.nextSibling);
+  CURRENT_EXPANDED = containerId;
+  setToggleButton(containerId, "收起");
+  fetch("/container/api/container-items/" + containerId + "?keyword=" + encodeURIComponent((document.querySelector('input[name=sku]') || {}).value || ""))
+    .then(function(r) { return r.text(); })
+    .then(function(html) { td.innerHTML = html; })
+    .catch(function() { td.innerHTML = '<div class="text-danger p-2">加载失败</div>'; });
+}
+
+function collapseRow(containerId) {
+  var tr = document.getElementById("expand-" + containerId);
+  if (tr) tr.parentNode.removeChild(tr);
+  if (CURRENT_EXPANDED === containerId) CURRENT_EXPANDED = null;
+  setToggleButton(containerId, "展开");
+}
+
+function setToggleButton(containerId, label) {
+  var row = document.getElementById("row-" + containerId);
+  if (!row) return;
+  var btn = row.querySelector(".btn-toggle");
+  if (btn) btn.textContent = label;
+}
+</script>
+{% endif %}
 {% endblock %}
