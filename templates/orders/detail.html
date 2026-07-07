@@ -59,9 +59,9 @@
     <table class="table items-table">
       <thead>
         <tr>
-          <th>SKU <button class="copy-btn" onclick="copyCol('sku')" title="一键复制">&#128203;</button></th>
-          <th>仓库 <button class="copy-btn" onclick="copyCol('warehouse')" title="一键复制">&#128203;</button></th>
-          <th>数量 <button class="copy-btn" onclick="copyCol('quantity')" title="一键复制">&#128203;</button></th>
+          <th>SKU <button class="copy-btn" onclick="copyCol('sku')" title="一键复制">复制</button></th>
+          <th>仓库 <button class="copy-btn" onclick="copyCol('warehouse')" title="一键复制">复制</button></th>
+          <th>数量 <button class="copy-btn" onclick="copyCol('quantity')" title="一键复制">复制</button></th>
         </tr>
       </thead>
       <tbody>
@@ -107,7 +107,7 @@
   <div class="card-header">订舱记录 <a href="{{ url_for('booking.new_booking', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">+</a></div>
   <div class="table-responsive">
     <table class="table table-hover">
-      <thead><tr><th>柜名</th><th>航名/航次</th><th>提单号</th><th>船公司</th><th>开航日期</th><th>目地港</th><th>状态</th><th class="actions">操作</th></tr></thead>
+      <thead><tr><th>柜名</th><th>航名/航次</th><th>提单号</th><th>船公司</th><th>ETD</th><th>ETA</th><th>目地港</th><th>状态</th><th class="actions">操作</th></tr></thead>
       <tbody>
         {% if booking_records %}
           {% for br in booking_records %}
@@ -117,12 +117,16 @@
             <td>{{ br.bl_no or '-' }}</td>
             <td>{{ br.shipping_company or '-' }}</td>
             <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+            <td>{{ br.eta or '-' }}</td>
             <td>{{ br.destination or '-' }}</td>
             <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
-            <td class="actions"><a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-primary">编辑</a></td>
+            <td class="actions">
+              <a href="{{ url_for('booking.eta_history', id=br.id) }}" class="btn btn-sm btn-outline-secondary">ETA历史</a>
+              <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+            </td>
           </tr>
           {% endfor %}
-        {% else %}<tr><td colspan="8"><div class="empty-state py-3"><p class="mb-0">暂无</p></div></td></tr>{% endif %}
+        {% else %}<tr><td colspan="9"><div class="empty-state py-3"><p class="mb-0">暂无</p></div></td></tr>{% endif %}
       </tbody>
     </table>
   </div>
@@ -189,12 +193,12 @@ function copyToClipboard(text, label) {
   try {
     var ok = document.execCommand("copy");
     if (ok) {
-      showCopyAlert("&#9989; 已复制 " + label);
+      showCopyAlert("已复制 " + label);
     } else {
-      showCopyAlert("&#10060; 复制失败，请重试");
+      showCopyAlert("复制失败，请重试");
     }
   } catch (e) {
-    showCopyAlert("&#10060; 复制失败，请重试");
+    showCopyAlert("复制失败，请重试");
   }
   document.body.removeChild(ta);
 }

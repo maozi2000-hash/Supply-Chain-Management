@@ -17,7 +17,7 @@
       <button type="submit" class="btn btn-primary">筛选</button>
       <a href="{{ url_for('production.list_production') }}" class="btn btn-outline-secondary">重置</a>
     </form>
-    <a href="{{ url_for('production.new_production') }}" class="btn btn-success">+ 创建生产任务</a>
+    <a href="{{ url_for('production.new_production') }}" class="btn btn-success">创建生产任务</a>
   </div>
 </div>
 
@@ -61,7 +61,6 @@
         {% else %}
           <tr><td colspan="7">
             <div class="empty-state">
-              <div class="empty-icon">&#9881;</div>
               <p>暂无生产任务</p>
               <a href="{{ url_for('production.new_production') }}" class="btn btn-primary">创建第一条生产任务</a>
             </div>

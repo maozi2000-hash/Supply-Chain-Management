@@ -96,16 +96,16 @@
         {% endif %}
         <a href="{{ url_for('orders.template_items') }}" class="btn btn-sm btn-outline-secondary">下载模板</a>
         <button type="button" class="btn btn-sm btn-outline-warning" onclick="showManualModal()">手动添加/删除</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshItems()" title="刷新">&#8635;</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshItems()" title="刷新">刷新</button>
       </div>
     </div>
     <div class="table-responsive">
       <table class="table items-table" id="itemsTable">
         <thead>
           <tr>
-            <th>SKU <button class="copy-btn" onclick="copyColumn('sku')" title="一键复制SKU列">&#128203;</button></th>
-            <th>仓库 <button class="copy-btn" onclick="copyColumn('warehouse')" title="一键复制仓库列">&#128203;</button></th>
-            <th>数量 <button class="copy-btn" onclick="copyColumn('quantity')" title="一键复制数量列">&#128203;</button></th>
+            <th>SKU <button class="copy-btn" onclick="copyColumn('sku')" title="一键复制SKU列">复制</button></th>
+            <th>仓库 <button class="copy-btn" onclick="copyColumn('warehouse')" title="一键复制仓库列">复制</button></th>
+            <th>数量 <button class="copy-btn" onclick="copyColumn('quantity')" title="一键复制数量列">复制</button></th>
             <th style="width:60px;"></th>
           </tr>
         </thead>
@@ -123,9 +123,9 @@
   <!-- 底部一键复制 -->
   <div class="d-flex gap-2 mt-3 align-items-center">
     <span class="text-muted" style="font-size:12px;">一键复制整列：</span>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyColumn('sku')">&#128203; 复制 SKU</button>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyColumn('warehouse')">&#128203; 复制仓库</button>
-    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyColumn('quantity')">&#128203; 复制数量</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyColumn('sku')">复制 SKU</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyColumn('warehouse')">复制仓库</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="copyColumn('quantity')">复制数量</button>
   </div>
 
  <div class="d-flex gap-2">
@@ -227,12 +227,12 @@ function copyToClipboard(text, label) {
   try {
     var ok = document.execCommand("copy");
     if (ok) {
-      showCopyAlert("&#9989; 已复制 " + label);
+      showCopyAlert("已复制 " + label);
     } else {
-      showCopyAlert("&#10060; 复制失败，请重试");
+      showCopyAlert("复制失败，请重试");
     }
   } catch (e) {
-    showCopyAlert("&#10060; 复制失败，请重试");
+    showCopyAlert("复制失败，请重试");
   }
   document.body.removeChild(ta);
 }
@@ -328,8 +328,8 @@ function showManualModal() {
     '<div style="width:100px;"><label class="form-label">数量</label><input type="number" class="form-control" id="manQty" value="1" min="1"></div>' +
     '</div>' +
     '<div class="d-flex gap-2 mb-3">' +
-    '<button type="button" class="btn btn-success btn-sm" onclick="manualOp(&#39;add&#39;)">+ 添加</button>' +
-    '<button type="button" class="btn btn-danger btn-sm" onclick="manualOp(&#39;remove&#39;)">- 删除</button>' +
+    '<button type="button" class="btn btn-success btn-sm" onclick="manualOp(&#39;add&#39;)">添加</button>' +
+    '<button type="button" class="btn btn-danger btn-sm" onclick="manualOp(&#39;remove&#39;)">删除</button>' +
     '</div>' +
     '<div id="manMsg" style="font-size:13px;"></div>' +
     '</div></div>';

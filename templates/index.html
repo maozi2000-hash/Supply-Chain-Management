@@ -8,7 +8,7 @@
 <div class="row g-3 mb-4">
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card">
-      <div class="stat-icon" style="background:#e8f0fe;color:#1a73e8;">&#9745;</div>
+      <div class="stat-icon" style="background:#e8f0fe;color:#1a73e8;"></div>
       <div>
         <div class="stat-value">{{ total_orders }}</div>
         <div class="stat-label">订单总数</div>
@@ -17,7 +17,7 @@
   </div>
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card">
-      <div class="stat-icon" style="background:#e6f4ea;color:#137333;">&#9973;</div>
+      <div class="stat-icon" style="background:#e6f4ea;color:#137333;"></div>
       <div>
         <div class="stat-value">{{ status_counts.get('已订舱', 0) + status_counts.get('装柜完成', 0) }}</div>
         <div class="stat-label">已订舱 / 装柜完成</div>
@@ -26,7 +26,7 @@
   </div>
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card">
-      <div class="stat-icon" style="background:#fce8e6;color:#c5221f;">&#10006;</div>
+      <div class="stat-icon" style="background:#fce8e6;color:#c5221f;"></div>
       <div>
         <div class="stat-value">{{ status_counts.get('已取消', 0) }}</div>
         <div class="stat-label">已取消</div>
@@ -66,7 +66,7 @@
               {% endfor %}
             {% else %}
               <tr><td colspan="5">
-                <div class="empty-state"><div class="empty-icon">&#128203;</div><p>暂无订单数据</p></div>
+                <div class="empty-state"><p>暂无订单数据</p></div>
               </td></tr>
             {% endif %}
           </tbody>
@@ -79,9 +79,9 @@
     <div class="card mb-3">
       <div class="card-header">快捷操作</div>
       <div class="card-body d-grid gap-2">
-        <a href="{{ url_for('orders.new_order') }}" class="btn btn-outline-primary">+ 新增订单</a>
-        <a href="{{ url_for('booking.new_booking') }}" class="btn btn-outline-primary">+ 创建订舱记录</a>
-        <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-primary">+ 新增装柜记录</a>
+        <a href="{{ url_for('orders.new_order') }}" class="btn btn-outline-primary">新增订单</a>
+        <a href="{{ url_for('booking.new_booking') }}" class="btn btn-outline-primary">创建订舱记录</a>
+        <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-primary">新增装柜记录</a>
       </div>
     </div>
     <div class="card">
@@ -97,6 +97,33 @@
         {% else %}
           <p class="text-muted text-center mb-0">暂无数据</p>
         {% endif %}
+      </div>
+    </div>
+    <div class="card mt-3">
+      <div class="card-header">订舱 ETA 总览</div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>订单号</th>
+              <th>ETA</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% if recent_bookings %}
+              {% for br in recent_bookings %}
+              <tr>
+                <td>{% if br.order %}<a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
+                <td>{{ br.eta or '-' }}</td>
+                <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="3"><div class="empty-state py-3"><p class="mb-0">暂无 ETA 数据</p></div></td></tr>
+            {% endif %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

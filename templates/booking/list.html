@@ -1,98 +1,178 @@
-{# 订舱列表页 — 未填订舱的订单 + 已填订舱的记录 同表展示 #}
+{# 订舱记录列表页 — 单表混合：未订舱订单 + 已订舱记录，UI 与 sku/orders/container 完全一致 #}
 {% extends "base.html" %}
 {% block title %}订舱管理 — 供应商管理系统{% endblock %}
 {% block page_title %}订舱管理{% endblock %}
 
+{% block extra_css %}
+<style>
+  .sku-search-box { background:#ffffff; border:1px solid #e0e0e0; }
+  .sku-search-box .form-control { border-color:#d0d0d0; }
+  .sku-search-box .form-control:focus { border-color:#888; box-shadow:none; }
+  .sku-result-card { border:1px solid #d0d0d0; }
+  .sku-result-card .card-header { background:#f8f9fa; color:#333; border-bottom:1px solid #e0e0e0; font-weight:500; }
+  .sku-delete-bar { display: none; justify-content: space-between; align-items: center; padding: 6px 12px; background: #f8f9fa; border-radius: 4px; margin-bottom: 8px; }
+  .sku-delete-bar.show { display: flex; }
+  .bkg-checkbox, .bkg-select-all { width: 16px; height: 16px; cursor: pointer; accent-color: #2c3e50; }
+  tr.row-pending { background: #f8f9fa; }
+</style>
+{% endblock %}
+
 {% block content %}
 
-<div class="card mb-3">
-  <div class="card-body d-flex justify-content-between align-items-center">
-    <form method="GET" action="{{ url_for('booking.list_booking') }}" class="search-bar">
-      <select name="status" class="form-select">
-        <option value="">全部状态</option>
-        <option value="待订舱" {% if current_status == '待订舱' %}selected{% endif %}>待订舱</option>
-        <option value="已订舱" {% if current_status == '已订舱' %}selected{% endif %}>已订舱</option>
-        <option value="已出运" {% if current_status == '已出运' %}selected{% endif %}>已出运</option>
-      </select>
-      <button type="submit" class="btn btn-primary">筛选</button>
-      <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">重置</a>
+<div class="list-freeze-page">
+
+<div class="card mb-3 sku-search-box">
+  <div class="card-body py-3">
+    <form method="GET" action="{{ url_for('booking.list_booking') }}">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">订单号</label>
+          <input type="text" name="order_no" class="form-control form-control-sm"
+                 value="{{ order_no_query or '' }}" placeholder="精确匹配">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">供应商</label>
+          <input type="text" name="supplier" class="form-control form-control-sm"
+                 value="{{ supplier_query or '' }}" placeholder="模糊匹配（包含）">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">客户名</label>
+          <input type="text" name="custom_name" class="form-control form-control-sm"
+                 value="{{ custom_name_query or '' }}" placeholder="模糊匹配（包含）">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">状态</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">全部状态</option>
+            <option value="待订舱" {% if current_status == '待订舱' %}selected{% endif %}>待订舱</option>
+            <option value="已订舱" {% if current_status == '已订舱' %}selected{% endif %}>已订舱</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">提单号</label>
+          <input type="text" name="bl_no" class="form-control form-control-sm"
+                 value="{{ bl_no_query or '' }}" placeholder="精确匹配">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">船名/航次</label>
+          <input type="text" name="vessel_voyage" class="form-control form-control-sm"
+                 value="{{ vessel_voyage_query or '' }}" placeholder="模糊匹配（包含）">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">船公司</label>
+          <input type="text" name="shipping_company" class="form-control form-control-sm"
+                 value="{{ shipping_company_query or '' }}" placeholder="模糊匹配（包含）">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">目的地</label>
+          <input type="text" name="destination" class="form-control form-control-sm"
+                 value="{{ destination_query or '' }}" placeholder="模糊匹配（包含）">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small text-muted mb-1">ETD ≥</label>
+          <input type="date" name="etd_start" class="form-control form-control-sm"
+                 value="{{ etd_start or '' }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small text-muted mb-1">ETD ≤</label>
+          <input type="date" name="etd_end" class="form-control form-control-sm"
+                 value="{{ etd_end or '' }}">
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+          <button type="submit" class="btn btn-secondary btn-sm flex-fill">筛选</button>
+          {% if any_filter %}
+            <a href="{{ url_for('booking.list_booking') }}" class="btn btn-link btn-sm text-muted flex-fill p-0">清空</a>
+          {% endif %}
+        </div>
+        <div class="col-md-3 d-flex gap-2 justify-content-end ms-auto">
+          <a href="{{ url_for('booking.new_booking') }}" class="btn btn-secondary btn-sm">创建订舱记录</a>
+        </div>
+      </div>
     </form>
-    <a href="{{ url_for('booking.new_booking') }}" class="btn btn-success">+ 创建订舱记录</a>
   </div>
 </div>
 
-<div class="card">
+<div class="sku-delete-bar" id="bookingSelectBar">
+  <span style="font-size:12px;color:#2c3e50;">已选 <strong id="bookingSelectedCount">0</strong> 项</span>
+  <button type="button" class="btn btn-sm btn-outline-secondary" id="btnExportSelected" onclick="exportSelectedBookings();" disabled>导出所选</button>
+</div>
+
+{% if any_filter %}
+{# 筛选模式：单表混合（无分页） #}
+<div class="card mb-3 sku-result-card list-freeze-card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>筛选条件：{{ filter_summary or '无' }} · 命中 {{ unified_search_results|length }} 条</span>
+  </div>
   <div class="table-responsive">
-    <table class="table table-hover">
+    <table class="table table-hover mb-0">
       <thead>
         <tr>
+          <th style="width:32px;"><input type="checkbox" class="bkg-select-all"></th>
           <th>状态</th>
           <th>订单号</th>
           <th>供应商</th>
-          <th>柜名</th>
-          <th>航名/航次</th>
+          <th>客户名</th>
+          <th>船名/航次</th>
           <th>提单号</th>
           <th>船公司</th>
-          <th>开航日期</th>
-          <th>目地港</th>
+          <th>ETD</th>
+          <th>ETA</th>
+          <th>目的地</th>
           <th>订舱状态</th>
           <th class="actions">操作</th>
         </tr>
       </thead>
       <tbody>
-        {# 还没填订舱的订单（黄色背景） #}
-        {% for o in pending_orders %}
-        <tr style="background:#fff8e6;">
-          <td><span class="badge bg-warning text-dark">待填订舱</span></td>
-          <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-          <td>{{ o.supplier_name }}</td>
-          <td>{{ o.custom_name or '-' }}</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td class="text-muted">-</td>
-          <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
-          <td class="actions">
-            <a href="{{ url_for('booking.new_booking', order_id=o.id) }}" class="btn btn-sm btn-primary">填订舱</a>
-          </td>
-        </tr>
-        {% endfor %}
-
-        {# 已填订舱的记录 #}
-        {% for br in booking_records %}
-        <tr>
-          <td><span class="badge bg-success">已填订舱</span></td>
-          <td>
-            {% if br.order %}
-            <a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>
-            {% else %}-{% endif %}
-          </td>
-          <td>{{ br.order.supplier_name if br.order else '-' }}</td>
-          <td>{{ br.custom_name or '-' }}</td>
-          <td>{{ br.vessel_voyage or '-' }}</td>
-          <td>{{ br.bl_no or '-' }}</td>
-          <td>{{ br.shipping_company or '-' }}</td>
-          <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
-          <td>{{ br.destination or '-' }}</td>
-          <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
-          <td class="actions">
-            <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
-            <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;"
-                  onsubmit="return confirm('确定要删除此订舱记录吗？');">
-              <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-
-        {% if not pending_orders and not booking_records %}
-        <tr><td colspan="11">
-          <div class="empty-state">
-            <div class="empty-icon">📋</div>
-            <p>暂无订舱记录</p>
-            <a href="{{ url_for('booking.new_booking') }}" class="btn btn-primary">创建第一条订舱记录</a>
-          </div>
+        {% if unified_search_results %}
+          {% for r in unified_search_results %}
+          {% if r.kind == 'order' %}
+          {% set o = r.order %}
+          <tr class="row-pending" data-type="order">
+            <td><input type="checkbox" class="bkg-checkbox" data-type="order" data-id="{{ o.id }}"></td>
+            <td><span class="badge bg-light text-secondary border">待订舱</span></td>
+            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+            <td>{{ o.supplier_name }}</td>
+            <td>{{ o.custom_name or '-' }}</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td class="actions">
+              <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('booking.new_booking', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">填订舱</a>
+            </td>
+          </tr>
+          {% else %}
+          {% set br = r.booking %}
+          <tr data-type="booking">
+            <td><input type="checkbox" class="bkg-checkbox" data-type="booking" data-id="{{ br.id }}"></td>
+            <td><span class="badge bg-light text-dark border">已订舱</span></td>
+            <td>{% if br.order %}<a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td>{{ br.order.supplier_name if br.order else '-' }}</td>
+            <td>{{ br.custom_name or '-' }}</td>
+            <td>{{ br.vessel_voyage or '-' }}</td>
+            <td>{{ br.bl_no or '-' }}</td>
+            <td>{{ br.shipping_company or '-' }}</td>
+            <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+            <td>{{ br.eta or '-' }}</td>
+            <td>{{ br.destination or '-' }}</td>
+            <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td class="actions">
+              <a href="{{ url_for('booking.eta_history', id=br.id) }}" class="btn btn-sm btn-outline-secondary">ETA历史</a>
+              <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
+              <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此订舱记录吗？');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+              </form>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        {% else %}
+        <tr><td colspan="13">
+          <div class="text-center text-muted py-4">没有记录匹配当前筛选条件</div>
         </td></tr>
         {% endif %}
       </tbody>
@@ -100,29 +180,207 @@
   </div>
 </div>
 
-{# 分页 #}
-{% if pagination and pagination.pages > 1 %}
-<div class="d-flex justify-content-center mt-3">
-  <nav>
-    <ul class="pagination mb-0">
-      {% if pagination.has_prev %}
-      <li class="page-item"><a class="page-link" href="{{ url_for('booking.list_booking', page=pagination.prev_num, status=current_status) }}">上一页</a></li>
-      {% endif %}
-      {% for p in pagination.iter_pages() %}
-        {% if p %}
-        <li class="page-item {% if p == pagination.page %}active{% endif %}">
-          <a class="page-link" href="{{ url_for('booking.list_booking', page=p, status=current_status) }}">{{ p }}</a>
-        </li>
+{% else %}
+{# 默认视图：单表混合（未订舱 + 已订舱分页） #}
+<div class="card list-freeze-card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th style="width:32px;"><input type="checkbox" class="bkg-select-all"></th>
+          <th>状态</th>
+          <th>订单号</th>
+          <th>供应商</th>
+          <th>客户名</th>
+          <th>船名/航次</th>
+          <th>提单号</th>
+          <th>船公司</th>
+          <th>ETD</th>
+          <th>ETA</th>
+          <th>目的地</th>
+          <th>订舱状态</th>
+          <th class="actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if unified_records %}
+          {% for r in unified_records %}
+          {% if r.kind == 'order' %}
+          {% set o = r.order %}
+          <tr class="row-pending" data-type="order">
+            <td><input type="checkbox" class="bkg-checkbox" data-type="order" data-id="{{ o.id }}"></td>
+            <td><span class="badge bg-light text-secondary border">待订舱</span></td>
+            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+            <td>{{ o.supplier_name }}</td>
+            <td>{{ o.custom_name or '-' }}</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td class="text-muted">-</td>
+            <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td class="actions">
+              <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('booking.new_booking', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">填订舱</a>
+            </td>
+          </tr>
+          {% else %}
+          {% set br = r.booking %}
+          <tr data-type="booking">
+            <td><input type="checkbox" class="bkg-checkbox" data-type="booking" data-id="{{ br.id }}"></td>
+            <td><span class="badge bg-light text-dark border">已订舱</span></td>
+            <td>{% if br.order %}<a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td>{{ br.order.supplier_name if br.order else '-' }}</td>
+            <td>{{ br.custom_name or '-' }}</td>
+            <td>{{ br.vessel_voyage or '-' }}</td>
+            <td>{{ br.bl_no or '-' }}</td>
+            <td>{{ br.shipping_company or '-' }}</td>
+            <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+            <td>{{ br.eta or '-' }}</td>
+            <td>{{ br.destination or '-' }}</td>
+            <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td class="actions">
+              <a href="{{ url_for('booking.eta_history', id=br.id) }}" class="btn btn-sm btn-outline-secondary">ETA历史</a>
+              <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
+              <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此订舱记录吗？');">
+                <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+              </form>
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
         {% else %}
-        <li class="page-item disabled"><span class="page-link">...</span></li>
+        <tr><td colspan="13">
+          <div class="text-center text-muted py-5">
+            <p>暂无订舱记录</p>
+            <a href="{{ url_for('booking.new_booking') }}" class="btn btn-secondary">创建第一条订舱记录</a>
+          </div>
+        </td></tr>
         {% endif %}
-      {% endfor %}
-      {% if pagination.has_next %}
-      <li class="page-item"><a class="page-link" href="{{ url_for('booking.list_booking', page=pagination.next_num, status=current_status) }}">下一页</a></li>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <span class="text-muted" style="font-size:13px;">共 <strong>{{ pagination.total }}</strong> 条</span>
+        <span class="text-muted" style="font-size:13px;">每页</span>
+        <select class="form-select form-select-sm" style="width:80px;" onchange="changePerPage(this.value)">
+          {% for n in [20, 50, 100, 200] %}
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+          {% endfor %}
+        </select>
+        <span class="text-muted" style="font-size:13px;">条</span>
+      </div>
+      {% if pagination and pagination.pages > 1 %}
+      <div class="d-flex align-items-center gap-2">
+        <nav>
+          <ul class="pagination pagination-sm mb-0">
+            {% if pagination.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('booking.list_booking', page=pagination.prev_num, per_page=per_page, status=current_status, order_no=order_no_query, supplier=supplier_query, bl_no=bl_no_query, vessel_voyage=vessel_voyage_query, shipping_company=shipping_company_query, destination=destination_query, custom_name=custom_name_query, etd_start=etd_start, etd_end=etd_end) }}">上一页</a></li>
+            {% endif %}
+            {% for p in pagination.iter_pages() %}
+              {% if p %}
+              <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                <a class="page-link" href="{{ url_for('booking.list_booking', page=p, per_page=per_page, status=current_status, order_no=order_no_query, supplier=supplier_query, bl_no=bl_no_query, vessel_voyage=vessel_voyage_query, shipping_company=shipping_company_query, destination=destination_query, custom_name=custom_name_query, etd_start=etd_start, etd_end=etd_end) }}">{{ p }}</a>
+              </li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">...</span></li>
+              {% endif %}
+            {% endfor %}
+            {% if pagination.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('booking.list_booking', page=pagination.next_num, per_page=per_page, status=current_status, order_no=order_no_query, supplier=supplier_query, bl_no=bl_no_query, vessel_voyage=vessel_voyage_query, shipping_company=shipping_company_query, destination=destination_query, custom_name=custom_name_query, etd_start=etd_start, etd_end=etd_end) }}">下一页</a></li>
+            {% endif %}
+          </ul>
+        </nav>
+        <span style="font-size:13px;">第 {{ pagination.page }}/{{ pagination.pages }} 页</span>
+        <span style="font-size:13px;">跳转至</span>
+        <input type="number" class="form-control form-control-sm" style="width:60px;" min="1" max="{{ pagination.pages }}" value="{{ pagination.page }}" id="pageJumpInput" onkeydown="if(event.key==='Enter') jumpToPage()">
+        <button class="btn btn-sm btn-outline-secondary" onclick="jumpToPage()">GO</button>
+      </div>
+      {% else %}
+      <span class="text-muted" style="font-size:13px;">第 1/1 页</span>
       {% endif %}
-    </ul>
-  </nav>
+    </div>
+  </div>
 </div>
 {% endif %}
 
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function changePerPage(n) {
+  var url = new URL(window.location.href);
+  url.searchParams.set("per_page", n);
+  url.searchParams.set("page", "1");
+  window.location.href = url.toString();
+}
+function jumpToPage() {
+  var input = document.getElementById("pageJumpInput");
+  if (!input) return;
+  var page = parseInt(input.value);
+  var max = parseInt(input.max);
+  if (isNaN(page) || page < 1) page = 1;
+  if (page > max) page = max;
+  var url = new URL(window.location.href);
+  url.searchParams.set("page", page);
+  window.location.href = url.toString();
+}
+function updateBookingBar() {
+  var n = document.querySelectorAll(".bkg-checkbox:checked").length;
+  var el = document.getElementById("bookingSelectedCount");
+  if (el) el.textContent = n;
+  var bar = document.getElementById("bookingSelectBar");
+  var btn = document.getElementById("btnExportSelected");
+  if (bar) {
+    if (n > 0) bar.classList.add("show");
+    else bar.classList.remove("show");
+  }
+  if (btn) {
+    btn.disabled = (n === 0);
+    btn.textContent = n > 0 ? "导出所选（" + n + "）" : "导出所选";
+  }
+  var chkAll = document.querySelector(".bkg-select-all");
+  if (chkAll) {
+    var cbs = document.querySelectorAll(".bkg-checkbox");
+    var total = cbs.length;
+    var checked = Array.from(cbs).filter(function(c){return c.checked;}).length;
+    chkAll.checked = (total > 0 && checked === total);
+    chkAll.indeterminate = (checked > 0 && checked < total);
+  }
+}
+function exportSelectedBookings() {
+  var cbs = Array.from(document.querySelectorAll(".bkg-checkbox:checked"));
+  if (cbs.length === 0) return;
+  var orderIds = [];
+  var bookingIds = [];
+  cbs.forEach(function(c){
+    if (c.getAttribute("data-type") === "order") orderIds.push(c.getAttribute("data-id"));
+    else if (c.getAttribute("data-type") === "booking") bookingIds.push(c.getAttribute("data-id"));
+  });
+  var url = "/booking/batch-export?";
+  if (orderIds.length) url += "order_ids=" + orderIds.join(",") + "&";
+  if (bookingIds.length) url += "booking_ids=" + bookingIds.join(",");
+  window.location.href = url;
+}
+document.addEventListener("DOMContentLoaded", function() {
+  var chkAll = document.querySelector(".bkg-select-all");
+  if (chkAll) {
+    chkAll.addEventListener("change", function() {
+      var cbs = document.querySelectorAll(".bkg-checkbox");
+      cbs.forEach(function(c){c.checked = chkAll.checked;});
+      updateBookingBar();
+    });
+  }
+  document.querySelectorAll(".bkg-checkbox").forEach(function(cb) {
+    cb.addEventListener("change", updateBookingBar);
+  });
+  updateBookingBar();
+});
+</script>
 {% endblock %}

@@ -45,7 +45,7 @@ body.dragging * { user-select: none !important; }
       <!-- 订单参考（自动带入，可修改） -->
       <div class="alert alert-info mb-3" role="alert" style="display:flex;align-items:center;justify-content:space-between;">
         <div>
-          <strong>📦 当前订单：</strong>
+          <strong>当前订单：</strong>
           <a href="{{ url_for('orders.order_detail', id=target_order.id) }}" target="_blank" class="alert-link">{{ target_order.order_no }}</a>
           {% if target_order.supplier_name %} · <span class="text-muted">{{ target_order.supplier_name }}</span>{% endif %}
           {% if target_order.custom_name %} · <span class="text-muted">{{ target_order.custom_name }}</span>{% endif %}
@@ -57,7 +57,7 @@ body.dragging * { user-select: none !important; }
       </div>
 {% elif pending_orders %}
       <div class="alert alert-warning mb-3" role="alert">
-        <strong>⚠ 所有订单都已填完订舱。</strong>
+        <strong>所有订单都已填完订舱。</strong>
         <a href="{{ url_for('booking.list_booking') }}" class="alert-link">返回列表</a>
       </div>
 {% endif %}
@@ -66,9 +66,9 @@ body.dragging * { user-select: none !important; }
     <div class="paste-area">
       <label class="form-label">粘贴船代订舱信息</label>
       <textarea class="form-control" id="pasteInput" rows="5"
-                placeholder="将船代发来的订舱信息粘贴到这里，系统自动识别字段&#10;&#10;示例：&#10;航名/航次:OOCL FRANCE/070E&#10;提单号:EGLV143660137161&#10;船公司:EGL长荣&#10;开航日期:2026-06-16&#10;目地港:NEW YORK,NY&#10;截单时间:2026-06-10 12:00"></textarea>
+                placeholder="将船代发来的订舱信息粘贴到这里，系统自动识别字段&#10;&#10;示例：&#10;航名/航次:OOCL FRANCE/070E&#10;提单号:EGLV143660137161&#10;船公司:EGL长荣&#10;开航日期:2026-06-16&#10;ETA:2026-07-20&#10;目地港:NEW YORK,NY&#10;截单时间:2026-06-10 12:00"></textarea>
       <button type="button" class="btn btn-outline-primary btn-parse" id="btnParse" onclick="parseBookingText()">
-        &#128269; 智能识别填写
+        智能识别填写
       </button>
       <div class="parse-result" id="parseResult"></div>
     </div>
@@ -86,11 +86,13 @@ body.dragging * { user-select: none !important; }
       <input type="hidden" name="module_order" id="moduleOrder" value="">
       {% if target_order %}
         <input type="hidden" name="order_id" value="{{ target_order.id }}">
+      {% elif booking and booking.order_id %}
+        <input type="hidden" name="order_id" value="{{ booking.order_id }}">
       {% endif %}
 
       <div class="mt-4 d-flex gap-2">
         <button type="submit" class="btn btn-primary">
-          {% if booking %}保存修改{% else %}创建订舰{% endif %}
+          {% if booking %}保存修改{% else %}创建订舱{% endif %}
         </button>
         <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">返回列表</a>
       </div>
@@ -112,9 +114,9 @@ var MODULE_DEFS = [
   { key: "bl_no",        label: "提单号",           type: "text",     required: false, hint: "提单号" },
   { key: "shipping_company", label: "船公司",        type: "text",     required: false, hint: "例如 EGL长荣" },
   { key: "etd",          label: "开航日期 (ETD)",   type: "date",     required: false, hint: "开航日期" },
+  { key: "eta",          label: "预计到港 (ETA)",   type: "text",     required: false, hint: "例如 2026-07-20 / 7月中旬 / 待船司确认" },
   { key: "destination",  label: "目地港",           type: "text",     required: false, hint: "例如 NEW YORK,NY" },
   { key: "cutoff_time",  label: "截单时间",         type: "text",     required: false, hint: "例如 2026-06-10 12:00" },
-  { key: "status",       label: "状态",             type: "status",   required: false, hint: "订舱状态" },
   { key: "remarks",      label: "备注",             type: "textarea", required: false, hint: "备注信息" },
 ];
 
@@ -132,9 +134,9 @@ var EDIT_DATA = {% if booking %}{
   bl_no: "{{ booking.bl_no or '' }}",
   shipping_company: "{{ booking.shipping_company or '' }}",
   etd: "{{ booking.etd.strftime('%Y-%m-%d') if booking.etd else '' }}",
+  eta: "{{ booking.eta or '' }}",
   destination: "{{ booking.destination or '' }}",
   cutoff_time: "{{ booking.cutoff_time or '' }}",
-  status: "{{ booking.status or '待订舱' }}",
   remarks: "{{ booking.remarks or '' }}"
 }{% else %}{
   custom_name: "{{ prefill.custom_name if prefill else '' }}",
@@ -142,9 +144,9 @@ var EDIT_DATA = {% if booking %}{
   bl_no: "{{ prefill.bl_no if prefill else '' }}",
   shipping_company: "{{ prefill.shipping_company if prefill else '' }}",
   etd: "{{ prefill.etd if prefill else '' }}",
+  eta: "{{ prefill.eta if prefill else '' }}",
   destination: "{{ prefill.destination if prefill else '' }}",
   cutoff_time: "{{ prefill.cutoff_time if prefill else '' }}",
-  status: "{{ prefill.status if prefill else '待订舱' }}",
   remarks: "{{ prefill.remarks if prefill else '' }}"
 }{% endif %};
 
@@ -226,7 +228,7 @@ function renderModules(order) {
     // 拖拽手柄
     var handle = document.createElement("span");
     handle.className = "drag-handle";
-    handle.innerHTML = "&#x2630;&#x2630;";
+    handle.innerHTML = "";
     card.appendChild(handle);
 
     // 标签
@@ -237,16 +239,7 @@ function renderModules(order) {
 
     // 表单控件
     var val = EDIT_DATA[def.key] !== undefined ? EDIT_DATA[def.key] : "";
-    if (def.key === "status") {
-      var sel2 = document.createElement("select");
-      sel2.className = "form-select";
-      sel2.name = "status";
-      sel2.id = "field_status";
-      ["待订舱", "已订舱", "已出运"].forEach(function(s) {
-        sel2.innerHTML += '<option value="' + s + '"' + (val === s ? " selected" : "") + '>' + s + '</option>';
-      });
-      card.appendChild(sel2);
-    } else if (def.type === "textarea") {
+    if (def.type === "textarea") {
       var ta = document.createElement("textarea");
       ta.className = "form-control";
       ta.name = def.key;
@@ -329,6 +322,7 @@ function parseBookingText() {
     bl_no:           /提单号\s*[:：]\s*(.+)/i,
     shipping_company:/船公司\s*[:：]\s*(.+)/i,
     etd:             /开航日期\s*[:：]\s*(.+)/i,
+    eta:             /(?:ETA|预计到港|到港时间|靠港时间)\s*[:：]\s*(.+)/i,
     destination:     /目地港\s*[:：]\s*(.+)/i,
     cutoff_time:     /截单时间\s*[:：]\s*(.+)/i,
   };

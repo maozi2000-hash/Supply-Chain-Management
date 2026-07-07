@@ -97,10 +97,27 @@ class BookingRecord(db.Model):
     bl_no = db.Column(db.String(100))               # 提单号
     shipping_company = db.Column(db.String(100))     # 船公司
     etd = db.Column(db.Date)                        # 开航日期(ETD)
+    eta = db.Column(db.String(100))                  # 预计到港时间(ETA)，保留文本以便自由更新
     destination = db.Column(db.String(100))          # 目地港
     cutoff_time = db.Column(db.String(100))          # 截单时间
-    status = db.Column(db.String(10), default="待订舱")  # 待订舱/已订舱/已出运
+    status = db.Column(db.String(10), default="待订舱")  # 待订舱/已订舱
     remarks = db.Column(db.Text)                     # 备注
+
+
+class BookingEtaHistory(db.Model):
+    __tablename__ = "booking_eta_history"
+
+    id = db.Column(db.Integer, primary_key=True)
+    booking_record_id = db.Column(
+        db.Integer, db.ForeignKey("booking_records.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    old_eta = db.Column(db.String(100))
+    new_eta = db.Column(db.String(100))
+    changed_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+    booking = db.relationship("BookingRecord", backref=db.backref(
+        "eta_history", lazy="select", cascade="all, delete-orphan", order_by="BookingEtaHistory.changed_at.desc()"
+    ))
 
 
 # ============================================================

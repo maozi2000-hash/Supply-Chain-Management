@@ -23,6 +23,7 @@
   <div class="card-header">基本信息
     <div>
       <a href="{{ url_for('container.new_container', id=container.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+      <a href="{{ url_for('container.export_documents', id=container.id) }}" class="btn btn-sm btn-outline-secondary">生成单证</a>
       <a href="{{ url_for('container.export_container', id=container.id) }}" class="btn btn-sm btn-success">导出 ZIP</a>
       <form method="POST" action="{{ url_for('container.delete_container', id=container.id) }}" style="display:inline;" onsubmit="return confirm('确定删除？');"><button class="btn btn-sm btn-outline-danger">删除</button></form>
     </div>

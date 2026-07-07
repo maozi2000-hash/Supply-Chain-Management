@@ -29,43 +29,171 @@ ALL_STATUS_VALUES = [v for v, _ in ORDER_STATUS_OPTIONS]
 # ============================================================
 # 列表
 # ============================================================
-@orders_bp.route("/")
-@login_required
-def list_orders():
-    page = request.args.get("page", 1, type=int)
-    keyword = request.args.get("keyword", "").strip()
-    current_status = request.args.get("status", "").strip()
+# ============================================================
+# 列表（多条件筛选 + 已装柜 / 未装柜 双表）
+# ============================================================
+def _build_orders_query(args):
+    """根据请求参数构造 Order 过滤查询。
+    返回 (query, summary_parts, any_filter)。
+    """
+    base = Order.query
+    parts = []
+    any_filter = False
 
-    query = Order.query
-
+    order_no = (args.get("order_no") or "").strip()
+    if order_no:
+        base = base.filter(Order.order_no == order_no)
+        parts.append(f"订单号={order_no}")
+        any_filter = True
+    supplier = (args.get("supplier") or "").strip()
+    if supplier:
+        base = base.filter(Order.supplier_name.ilike(f"%{supplier}%"))
+        parts.append(f"供应商含「{supplier}」")
+        any_filter = True
+    custom_name = (args.get("custom_name") or "").strip()
+    if custom_name:
+        base = base.filter(Order.custom_name.ilike(f"%{custom_name}%"))
+        parts.append(f"客户名含「{custom_name}」")
+        any_filter = True
+    status = (args.get("status") or "").strip()
+    if status and status in ALL_STATUS_VALUES:
+        base = base.filter(Order.status == status)
+        parts.append(f"状态={status}")
+        any_filter = True
+    created_start = (args.get("created_start") or "").strip()
+    if created_start:
+        try:
+            dt = datetime.datetime.strptime(created_start, "%Y-%m-%d")
+            base = base.filter(Order.created_at >= dt)
+            parts.append(f"创建≥{created_start}")
+            any_filter = True
+        except ValueError:
+            pass
+    created_end = (args.get("created_end") or "").strip()
+    if created_end:
+        try:
+            dt = datetime.datetime.strptime(created_end, "%Y-%m-%d")
+            dt = dt.replace(hour=23, minute=59, second=59)
+            base = base.filter(Order.created_at <= dt)
+            parts.append(f"创建≤{created_end}")
+            any_filter = True
+        except ValueError:
+            pass
+    sku = (args.get("sku") or "").strip()
+    if sku:
+        sku_oids = [oid for (oid,) in db.session.query(OrderItem.order_id)
+                     .filter(OrderItem.sku.ilike(f"%{sku}%"))
+                     .distinct().all()]
+        if sku_oids:
+            base = base.filter(Order.id.in_(sku_oids))
+        else:
+            base = base.filter(db.literal(False))
+        parts.insert(0, f"SKU 含「{sku}」")
+        any_filter = True
+    keyword = (args.get("keyword") or "").strip()
     if keyword:
-        query = query.filter(
+        base = base.filter(
             db.or_(
                 Order.order_no.contains(keyword),
                 Order.supplier_name.contains(keyword),
             )
         )
+        parts.append(f"模糊搜「{keyword}」")
+        any_filter = True
+    return base, parts, any_filter
 
-    if current_status and current_status in ALL_STATUS_VALUES:
-        query = query.filter(Order.status == current_status)
 
+@orders_bp.route("/")
+@login_required
+def list_orders():
+    """统一列表：未装柜的订单 + 已装柜的订单（单表混合）；支持多条件筛选。"""
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", ITEMS_PER_PAGE, type=int)
+    if per_page not in (20, 50, 100, 200):
+        per_page = ITEMS_PER_PAGE
+    query, summary_parts, any_filter = _build_orders_query(request.args)
     query = query.order_by(Order.created_at.desc())
-    pagination = query.paginate(page=page, per_page=ITEMS_PER_PAGE, error_out=False)
+
+    order_no = (request.args.get("order_no") or "").strip()
+    supplier = (request.args.get("supplier") or "").strip()
+    custom_name = (request.args.get("custom_name") or "").strip()
+    current_status = (request.args.get("status") or "").strip()
+    sku = (request.args.get("sku") or "").strip()
+    created_start = (request.args.get("created_start") or "").strip()
+    created_end = (request.args.get("created_end") or "").strip()
+    legacy_keyword = (request.args.get("keyword") or "").strip()
+
+    orders = []
+    pagination = None
+    pending_orders = []
+    unified_records = []
+    unified_search_results = []
+    filter_summary = ""
+
+    if any_filter:
+        all_orders = query.all()
+        oids = [o.id for o in all_orders]
+        containerized_ids = set()
+        if oids:
+            for (oid,) in db.session.query(ContainerRecord.order_id).filter(
+                ContainerRecord.order_id.in_(oids)
+            ).distinct().all():
+                containerized_ids.add(oid)
+
+        sku_count = {}
+        if sku and oids:
+            for it in OrderItem.query.filter(
+                OrderItem.order_id.in_(oids),
+                OrderItem.sku.ilike(f"%{sku}%")
+            ).all():
+                sku_count[it.order_id] = sku_count.get(it.order_id, 0) + 1
+
+        for o in all_orders:
+            unified_search_results.append({
+                "order": o,
+                "containerized": o.id in containerized_ids,
+                "matched_count": sku_count.get(o.id, 0) if sku else 0,
+            })
+        # Sort: pending first, then by -id
+        unified_search_results.sort(key=lambda r: (0 if not r["containerized"] else 1, -r["order"].id))
+
+        filter_summary = " · ".join(summary_parts)
+    else:
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        orders = pagination.items
+        # 默认视图：未装柜订单（top 50） + 已装柜订单（分页）合并单表
+        containerized_subq = db.session.query(ContainerRecord.order_id).distinct()
+        pending_orders = Order.query.filter(
+            ~Order.id.in_(containerized_subq)
+        ).order_by(Order.created_at.desc()).limit(50).all()
+        for o in pending_orders:
+            unified_records.append({"order": o, "containerized": False})
+        for o in orders:
+            unified_records.append({"order": o, "containerized": True})
 
     return render_template(
-        "orders/list.html",
-        active_menu="orders",
-        orders=pagination.items,
+        "orders/list.html", active_menu="orders",
+        orders=orders,
+        pagination=pagination,
         status_options=ORDER_STATUS_OPTIONS,
         current_status=current_status,
-        keyword=keyword,
-        pagination=pagination,
+        keyword=legacy_keyword,
+        order_no_query=order_no,
+        supplier_query=supplier,
+        custom_name_query=custom_name,
+        sku_query=sku,
+        created_start=created_start,
+        created_end=created_end,
+        any_filter=any_filter,
+        filter_summary=filter_summary,
+        unified_records=unified_records,
+        unified_search_results=unified_search_results,
+        pending_orders=pending_orders,
+        per_page=per_page,
     )
 
 
-# ============================================================
-# 新增
-# ============================================================
+
 @orders_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new_order():
@@ -739,28 +867,17 @@ def batch_import_confirm():
 @orders_bp.route("/batch-export")
 @login_required
 def batch_export():
-    keyword = request.args.get("keyword", "").strip()
-    current_status = request.args.get("status", "").strip()
     ids_param = request.args.get("ids", "").strip()
-
-    query = Order.query
     if ids_param:
         try:
             id_list = [int(x) for x in ids_param.split(",") if x.strip().isdigit()]
         except Exception:
             id_list = []
+        query = Order.query
         if id_list:
             query = query.filter(Order.id.in_(id_list))
     else:
-        if keyword:
-            query = query.filter(
-                db.or_(
-                    Order.order_no.contains(keyword),
-                    Order.supplier_name.contains(keyword),
-                )
-            )
-        if current_status and current_status in ALL_STATUS_VALUES:
-            query = query.filter(Order.status == current_status)
+        query, _summary, _any = _build_orders_query(request.args)
 
     orders = query.order_by(Order.created_at.desc()).all()
 

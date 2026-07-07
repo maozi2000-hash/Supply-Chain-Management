@@ -2,19 +2,40 @@ import os
 import zipfile
 import io
 import json as _json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from flask import (
     Blueprint, render_template, request, redirect, url_for, flash, session,
     send_file, jsonify, current_app,
 )
 from flask_login import login_required
 import re
-from models import db, Order, BookingRecord, ContainerRecord, ContainerImage, CustomsItem, ActualItem, OrderItem
+from models import db, Order, BookingRecord, ContainerRecord, ContainerImage, CustomsItem, ActualItem, OrderItem, SkuProduct
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 from PIL import Image as PILImage
 
 container_bp = Blueprint("container", __name__, url_prefix="/container")
+
+DOC_TEMPLATE_PATH = r"C:\Users\actpie\Desktop\整柜报关模板.xlsx"
+DOC_EXCHANGE_RATE = 6.9
+DOC_CLEARANCE_TOTAL_USD = 10000
+DOC_TARGET_PROFIT_RMB = 5000
+
+
+def _safe_filename(value):
+    return re.sub(r'[\\/:*?"<>|]+', "_", value or "N_A")
+
+
+def _default_origin_place(order):
+    if order and (order.supplier_name or "").strip() == "优瑞奇":
+        return "宁波"
+    return ""
+
+
+def _english_destination(destination):
+    if not destination:
+        return ""
+    return destination if re.search(r"[A-Za-z]", destination) else destination
 
 
 def _allowed_file(filename):
@@ -98,44 +119,197 @@ def _save_items(container, customs_json, actual_json):
 @container_bp.route("/")
 @login_required
 def list_container():
-    """统一列表：未填装柜的订单 + 已填装的装柜记录；支持 SKU 搜索（展开用前端 JS）"""
+    """统一列表：未装柜的订单 + 已装柜的记录（单表混合）；支持多条件筛选（SKU / 柜号 / 订单号 / 供应商 / 提单号 / 客户名 / 装柜日期）。"""
     page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 15, type=int)
+    if per_page not in (20, 50, 100, 200):
+        per_page = 15
+
     sku_query = (request.args.get("sku") or "").strip()
+    container_no_query = (request.args.get("container_no") or "").strip()
+    order_no_query = (request.args.get("order_no") or "").strip()
+    supplier_query = (request.args.get("supplier") or "").strip()
+    bl_no_query = (request.args.get("bl_no") or "").strip()
+    custom_name_query = (request.args.get("custom_name") or "").strip()
+    loading_start = (request.args.get("loading_start") or "").strip()
+    loading_end = (request.args.get("loading_end") or "").strip()
 
-    pagination = ContainerRecord.query.order_by(db.desc(ContainerRecord.id)).paginate(
-        page=page, per_page=15, error_out=False
-    )
+    any_filter = any([sku_query, container_no_query, order_no_query,
+                      supplier_query, bl_no_query, custom_name_query,
+                      loading_start, loading_end])
+
     pending_subq = db.session.query(ContainerRecord.order_id).distinct()
-    pending_orders = Order.query.filter(
-        ~Order.id.in_(pending_subq),
-        Order.status.notin_(["已取消", "装柜完成"])
-    ).order_by(db.desc(Order.created_at)).limit(50).all()
 
-    search_results = []
-    if sku_query:
-        from models import ActualItem
-        matched = ActualItem.query.filter(ActualItem.sku.ilike(f"%{sku_query}%")).all()
+    pagination = None
+    container_records = []
+    pending_orders = []
+    unified_records = []
+    unified_search_results = []
+    filter_summary = ""
+    matched_filter_labels = []
+
+    if any_filter:
+        # ============ 已装柜（ContainerRecord）查询 ============
+        join_order = False
+        join_booking = False
+        c_filters = []
+        if container_no_query:
+            c_filters.append(ContainerRecord.container_no == container_no_query)
+            matched_filter_labels.append(f"柜号={container_no_query}")
+        if order_no_query:
+            join_order = True
+            c_filters.append(Order.order_no == order_no_query)
+            matched_filter_labels.append(f"订单号={order_no_query}")
+        if supplier_query:
+            join_order = True
+            c_filters.append(Order.supplier_name.ilike(f"%{supplier_query}%"))
+            matched_filter_labels.append(f"供应商含「{supplier_query}」")
+        if custom_name_query:
+            join_order = True
+            c_filters.append(Order.custom_name.ilike(f"%{custom_name_query}%"))
+            matched_filter_labels.append(f"客户名含「{custom_name_query}」")
+        if bl_no_query:
+            join_booking = True
+            c_filters.append(BookingRecord.bl_no == bl_no_query)
+            matched_filter_labels.append(f"提单号={bl_no_query}")
+        if loading_start:
+            try:
+                d = datetime.strptime(loading_start, "%Y-%m-%d").date()
+                c_filters.append(ContainerRecord.loading_date >= d)
+                matched_filter_labels.append(f"装柜≥{loading_start}")
+            except ValueError:
+                loading_start = ""
+        if loading_end:
+            try:
+                d = datetime.strptime(loading_end, "%Y-%m-%d").date()
+                c_filters.append(ContainerRecord.loading_date <= d)
+                matched_filter_labels.append(f"装柜≤{loading_end}")
+            except ValueError:
+                loading_end = ""
+
+        cq = ContainerRecord.query
+        if join_order:
+            cq = cq.join(Order)
+        if join_booking:
+            cq = cq.join(BookingRecord)
+        for f in c_filters:
+            cq = cq.filter(f)
+
+        if sku_query:
+            sku_cids = [cid for (cid,) in db.session.query(ActualItem.container_record_id)
+                         .filter(ActualItem.sku.ilike(f"%{sku_query}%"))
+                         .distinct().all()]
+            if sku_cids:
+                cq = cq.filter(ContainerRecord.id.in_(sku_cids))
+            else:
+                cq = cq.filter(db.literal(False))
+            matched_filter_labels.insert(0, f"SKU 含「{sku_query}」")
+
+        containers = cq.order_by(db.desc(ContainerRecord.id)).distinct().all()
+
         from collections import OrderedDict
         agg = OrderedDict()
-        for it in matched:
-            agg.setdefault(it.container_record_id, []).append(it)
-        for cid, items in agg.items():
-            cr = db.session.get(ContainerRecord, cid)
-            if cr:
-                search_results.append({
-                    "container": cr,
-                    "matched_count": len(items),
-                    "matched_items": items,
+        cids = [cr.id for cr in containers]
+        if cids:
+            items_q = ActualItem.query.filter(ActualItem.container_record_id.in_(cids))
+            if sku_query:
+                items_q = items_q.filter(ActualItem.sku.ilike(f"%{sku_query}%"))
+            for it in items_q.order_by(ActualItem.id).all():
+                agg.setdefault(it.container_record_id, []).append(it)
+
+        for cr in containers:
+            items = agg.get(cr.id, [])
+            unified_search_results.append({
+                "kind": "container",
+                "id": cr.id,
+                "container": cr,
+                "order": cr.order,
+                "matched_count": len(items),
+                "matched_items": items,
+            })
+
+        # ============ 未装柜（Order）查询 ============
+        skip_pending = bool(container_no_query or bl_no_query or loading_start or loading_end)
+        if not skip_pending:
+            p_filters = []
+            if order_no_query:
+                p_filters.append(Order.order_no == order_no_query)
+            if supplier_query:
+                p_filters.append(Order.supplier_name.ilike(f"%{supplier_query}%"))
+            if custom_name_query:
+                p_filters.append(Order.custom_name.ilike(f"%{custom_name_query}%"))
+
+            pq = Order.query.filter(
+                ~Order.id.in_(pending_subq),
+                Order.status.notin_(["已取消", "装柜完成"])
+            )
+            for f in p_filters:
+                pq = pq.filter(f)
+
+            if sku_query:
+                sku_oids = [oid for (oid,) in db.session.query(OrderItem.order_id)
+                             .filter(OrderItem.sku.ilike(f"%{sku_query}%"))
+                             .distinct().all()]
+                if sku_oids:
+                    pq = pq.filter(Order.id.in_(sku_oids))
+                else:
+                    pq = pq.filter(db.literal(False))
+
+            pending_hits = pq.order_by(db.desc(Order.created_at)).limit(50).all()
+            for o in pending_hits:
+                matched_items = []
+                if sku_query:
+                    matched_items = OrderItem.query.filter(
+                        OrderItem.order_id == o.id,
+                        OrderItem.sku.ilike(f"%{sku_query}%")
+                    ).all()
+                unified_search_results.append({
+                    "kind": "order",
+                    "id": o.id,
+                    "order": o,
+                    "container": None,
+                    "matched_count": len(matched_items),
+                    "matched_items": matched_items,
                 })
+
+        # Sort: pending first (kind order before container), then by -order.id
+        unified_search_results.sort(key=lambda r: (0 if r["kind"] == "order" else 1, -r["order"].id))
+
+        filter_summary = " · ".join(matched_filter_labels)
+    else:
+        # 默认视图：未装柜订单（top 50） + 已装柜订单（分页）合并单表
+        pending_orders = Order.query.filter(
+            ~Order.id.in_(pending_subq),
+            Order.status.notin_(["已取消", "装柜完成"])
+        ).order_by(db.desc(Order.created_at)).limit(50).all()
+        pagination = ContainerRecord.query.order_by(db.desc(ContainerRecord.id)).paginate(
+            page=page, per_page=per_page, error_out=False
+        )
+        container_records = pagination.items
+        # 合并：未装柜（按 created_at desc）+ 已装柜（按 id desc）
+        for o in pending_orders:
+            unified_records.append({"kind": "order", "id": o.id, "order": o, "container": None, "matched_count": 0, "matched_items": []})
+        for cr in container_records:
+            unified_records.append({"kind": "container", "id": cr.id, "order": cr.order, "container": cr, "matched_count": 0, "matched_items": []})
 
     return render_template(
         "container/list.html", active_menu="container",
-        container_records=pagination.items,
+        unified_records=unified_records,
+        unified_search_results=unified_search_results,
         pagination=pagination,
-        pending_orders=pending_orders,
+        filter_summary=filter_summary,
+        any_filter=any_filter,
         sku_query=sku_query,
-        search_results=search_results,
+        container_no_query=container_no_query,
+        order_no_query=order_no_query,
+        supplier_query=supplier_query,
+        bl_no_query=bl_no_query,
+        custom_name_query=custom_name_query,
+        loading_start=loading_start,
+        loading_end=loading_end,
+        per_page=per_page,
     )
+
 
 
 @container_bp.route("/new", methods=["GET", "POST"])
@@ -443,6 +617,83 @@ def export_container(id):
     return send_file(zip_buffer, mimetype="application/zip", as_attachment=True, download_name=fn)
 
 
+@container_bp.route("/<int:id>/export-documents")
+@login_required
+def export_documents(id):
+    container = db.session.get(ContainerRecord, id)
+    if not container:
+        flash("装柜记录不存在", "error")
+        return redirect(url_for("container.list_container"))
+    if not os.path.exists(DOC_TEMPLATE_PATH):
+        flash("整柜报关模板不存在，请确认桌面模板文件仍在", "error")
+        return redirect(url_for("container.container_detail", id=id))
+
+    order = container.order
+    booking = container.booking
+    today = datetime.now().date()
+    contract_no = f"QSYH-{order.order_no if order else container.id}-{today.strftime('%Y%m%d')}"
+    sign_date = today - timedelta(days=15)
+    ship_date = booking.etd - timedelta(days=2) if booking and booking.etd else None
+    destination = booking.destination if booking else ""
+    origin_place = _default_origin_place(order)
+
+    wb = load_workbook(DOC_TEMPLATE_PATH)
+    ws = wb["报关资料"]
+
+    # 清空并写入商品明细。模板公式覆盖 H:O，最多使用 2:20 共 19 行。
+    sku_map = {p.sku: p for p in SkuProduct.query.all()}
+    source_items = list(container.customs_items or container.actual_items)
+    max_item_rows = 19
+    for row in range(2, 21):
+        for col in range(1, 7):
+            ws.cell(row=row, column=col, value=None)
+
+    for idx, item in enumerate(source_items[:max_item_rows], start=2):
+        product = sku_map.get(item.sku)
+        volume = 0
+        if product:
+            volume = (product.length or 0) * (product.width or 0) * (product.height or 0) / 1_000_000
+        ws.cell(row=idx, column=1, value=item.sku)
+        ws.cell(row=idx, column=2, value=item.quantity or 0)
+        ws.cell(row=idx, column=3, value=(product.unit_cost or 0) if product else 0)
+        ws.cell(row=idx, column=4, value=volume)
+        ws.cell(row=idx, column=5, value=(product.gross_weight or 0) if product else 0)
+        ws.cell(row=idx, column=6, value=(product.net_weight or 0) if product else 0)
+
+    ws["X1"] = DOC_EXCHANGE_RATE
+    ws["S2"] = contract_no
+    ws["V2"] = booking.bl_no if booking else ""
+    ws["Y2"] = container.actual_freight or container.estimated_freight or 0
+    ws["AA2"] = "宁波" if origin_place == "宁波" else ""
+    ws["AC2"] = "NINGBO" if origin_place == "宁波" else ""
+    ws["AF2"] = origin_place
+    ws["S3"] = sign_date
+    ws["V3"] = container.container_no or ""
+    ws["Y3"] = "个"
+    ws["AA3"] = destination or ""
+    ws["AC3"] = _english_destination(destination)
+    ws["AF3"] = "美国"
+    ws["S4"] = ship_date
+    ws["Y4"] = container.weight or 0
+    ws["AF4"] = "BY SEA"
+    ws["AD7"] = DOC_TARGET_PROFIT_RMB
+    ws["AB7"] = f"=({DOC_CLEARANCE_TOTAL_USD}+RANDBETWEEN(1,100))/U7"
+
+    # 暂时不填：出口日期、申报日期、监管方式、征免性质、征免方式、封号。
+    # 固定商品资料：无特殊要求时沿用模板默认品名、HS、申报要素等。
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename = f"单证_{_safe_filename(order.order_no if order else str(container.id))}_{today.strftime('%Y%m%d')}.xlsx"
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
 @container_bp.route("/<int:id>/export-diff")
 @login_required
 def export_diff(id):
@@ -634,3 +885,137 @@ def _compute_diff(customs_items, actual_items):
         result.append({"sku": orig, "customs_qty": cq, "actual_qty": aq, "desc": desc})
 
     return result
+
+
+# ============================================================
+# 批量导出（按 ids）
+# ============================================================
+@container_bp.route("/batch-export")
+@login_required
+def batch_export():
+    """支持混合 id：container_ids=1,2 + order_ids=3,4"""
+    container_ids_param = (request.args.get("container_ids") or request.args.get("ids") or "").strip()
+    order_ids_param = request.args.get("order_ids", "").strip()
+    try:
+        container_ids = [int(x) for x in container_ids_param.split(",") if x.strip().isdigit()]
+    except Exception:
+        container_ids = []
+    try:
+        order_ids = [int(x) for x in order_ids_param.split(",") if x.strip().isdigit()]
+    except Exception:
+        order_ids = []
+    if not container_ids and not order_ids:
+        flash("未选择任何记录", "warning")
+        return redirect(url_for("container.list_container"))
+
+    records = ContainerRecord.query.filter(ContainerRecord.id.in_(container_ids)).order_by(db.desc(ContainerRecord.id)).all() if container_ids else []
+    orders = Order.query.filter(Order.id.in_(order_ids)).order_by(db.desc(Order.id)).all() if order_ids else []
+    if not records and not orders:
+        flash("所选记录不存在", "warning")
+        return redirect(url_for("container.list_container"))
+
+    # 逐个打包为 zip（如有图片则包含图片）
+    import zipfile as _zip
+    import io as _io
+    from openpyxl import Workbook as _Workbook
+    from openpyxl.styles import Font as _Font, PatternFill as _PatternFill, Alignment as _Alignment
+
+    main_buf = _io.BytesIO()
+    with _zip.ZipFile(main_buf, "w", _zip.ZIP_DEFLATED) as zf:
+        # 已装柜记录：每个 container 一个 xlsx + 图片
+        for cr in records:
+            order = cr.order
+            prefix = (order.order_no if order else "N_A") + "_" + (cr.container_no or str(cr.id))
+            wb = _Workbook()
+            ws = wb.active
+            ws.title = "装柜数据"
+            hf = _Font(bold=True, size=12, color="FFFFFF")
+            hfill = _PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+            ac = _Alignment(horizontal="center")
+            for col, h in enumerate(["柜号", "装柜日期", "件数", "毛重", "体积", "备注"], 1):
+                c = ws.cell(row=1, column=col, value=h)
+                c.font = hf; c.fill = hfill; c.alignment = ac
+            ws.cell(row=2, column=1, value=cr.container_no or "")
+            ws.cell(row=2, column=2, value=cr.loading_date.strftime("%Y-%m-%d") if cr.loading_date else "")
+            ws.cell(row=2, column=3, value=cr.cargo_count or 0)
+            ws.cell(row=2, column=4, value=cr.weight or 0)
+            ws.cell(row=2, column=5, value=cr.volume or 0)
+            ws.cell(row=2, column=6, value=cr.remarks or "")
+            for cl in ["A", "B", "C", "D", "E", "F"]:
+                ws.column_dimensions[cl].width = 18
+            xbuf = _io.BytesIO()
+            wb.save(xbuf)
+            xbuf.seek(0)
+            zf.writestr(f"装柜数据_{prefix}.xlsx", xbuf.read())
+            for img in cr.images:
+                img_abs = os.path.join(current_app.config["UPLOAD_FOLDER"], img.file_path)
+                if os.path.exists(img_abs):
+                    zf.write(img_abs, f"图片/{prefix}_{img.original_name}")
+        # 未装柜订单：合并成 orders.xlsx
+        if orders:
+            wb = _Workbook()
+            ws = wb.active
+            ws.title = "订单"
+            hf = _Font(bold=True, size=12, color="FFFFFF")
+            hfill = _PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+            ac = _Alignment(horizontal="center")
+            for col, h in enumerate(["订单号", "供应商", "客户名", "状态", "创建时间"], 1):
+                c = ws.cell(row=1, column=col, value=h)
+                c.font = hf; c.fill = hfill; c.alignment = ac
+            for i, o in enumerate(orders, start=2):
+                ws.cell(row=i, column=1, value=o.order_no)
+                ws.cell(row=i, column=2, value=o.supplier_name)
+                ws.cell(row=i, column=3, value=o.custom_name or "")
+                ws.cell(row=i, column=4, value=o.status)
+                ws.cell(row=i, column=5, value=o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "")
+            for cl in ["A", "B", "C", "D", "E"]:
+                ws.column_dimensions[cl].width = 20
+            obuf = _io.BytesIO()
+            wb.save(obuf)
+            obuf.seek(0)
+            zf.writestr("未装柜订单.xlsx", obuf.read())
+
+    main_buf.seek(0)
+    ts = datetime.now().strftime("%Y%m%d_%H%M")
+    # 如果只有 orders，返回 xlsx
+    if records and not orders and not orders:
+        # Need a different approach: return xlsx instead of zip if only orders
+        pass
+    if records and not orders:
+        # Mixed: return zip
+        suffix = "mixed"
+    elif orders and not records:
+        # Only orders: return xlsx
+        from openpyxl import Workbook as __W
+        from openpyxl.styles import Font as __F, PatternFill as __P, Alignment as __A
+        xb = __W()
+        xws = xb.active
+        xws.title = "订单"
+        for col, h in enumerate(["订单号", "供应商", "客户名", "状态", "创建时间"], 1):
+            c = xws.cell(row=1, column=col, value=h)
+            c.font = __F(bold=True, size=12, color="FFFFFF")
+            c.fill = __P(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+            c.alignment = __A(horizontal="center")
+        for i, o in enumerate(orders, start=2):
+            xws.cell(row=i, column=1, value=o.order_no)
+            xws.cell(row=i, column=2, value=o.supplier_name)
+            xws.cell(row=i, column=3, value=o.custom_name or "")
+            xws.cell(row=i, column=4, value=o.status)
+            xws.cell(row=i, column=5, value=o.created_at.strftime("%Y-%m-%d %H:%M") if o.created_at else "")
+        for cl in ["A", "B", "C", "D", "E"]:
+            xws.column_dimensions[cl].width = 20
+        xb_buf = _io.BytesIO()
+        xb.save(xb_buf)
+        xb_buf.seek(0)
+        return send_file(
+            xb_buf,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"订单批量导出_{ts}.xlsx",
+        )
+    return send_file(
+        main_buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"装柜批量导出_{ts}.zip",
+    )

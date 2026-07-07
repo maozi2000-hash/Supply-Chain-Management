@@ -15,7 +15,7 @@
 <div class="row g-3 mb-3">
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card" style="border-left:4px solid #0d904f;">
-      <div class="stat-icon" style="background:#e6f4ea;color:#137333;">✓</div>
+      <div class="stat-icon" style="background:#e6f4ea;color:#137333;"></div>
       <div>
         <div class="stat-value">{{ plan.to_create|length }}</div>
         <div class="stat-label">将创建订单</div>
@@ -24,7 +24,7 @@
   </div>
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card" style="border-left:4px solid #e6a817;">
-      <div class="stat-icon" style="background:#fef7e0;color:#b06000;">⟳</div>
+      <div class="stat-icon" style="background:#fef7e0;color:#b06000;"></div>
       <div>
         <div class="stat-value">{{ plan.to_overwrite|length + plan.to_append|length }}</div>
         <div class="stat-label">将影响已有订单</div>
@@ -33,7 +33,7 @@
   </div>
   <div class="col-sm-6 col-lg-3">
     <div class="stat-card" style="border-left:4px solid #5f6368;">
-      <div class="stat-icon" style="background:#f1f3f4;color:#5f6368;">↷</div>
+      <div class="stat-icon" style="background:#f1f3f4;color:#5f6368;"></div>
       <div>
         <div class="stat-value">{{ plan.to_skip|length }}</div>
         <div class="stat-label">将跳过（已存在）</div>
@@ -210,7 +210,7 @@
       <input type="hidden" name="strategy" value="{{ strategy }}">
       <button type="submit" class="btn btn-primary"
               {% if not (plan.to_create or plan.to_overwrite or plan.to_append) %}disabled{% endif %}>
-        ✓ 确认导入
+        确认导入
       </button>
     </form>
   </div>

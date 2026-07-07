@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}SKU 产品库 — 供应商管理系统{% endblock %}
-{% block page_title %}SKU 产品库{% endblock %}
+{% block title %}产品管理 — 供应商管理系统{% endblock %}
+{% block page_title %}产品管理{% endblock %}
 
 {% block content %}
 {% macro sort_link(column, label) %}
@@ -12,26 +12,28 @@
           {% endmacro %}
 
 <style>
-.sku-checkbox, .sku-select-all { width: 16px; height: 16px; cursor: pointer; accent-color: #1a73e8; }
-.sku-delete-bar { display: none; justify-content: space-between; align-items: center; padding: 6px 12px; background: #e8f0fe; border-radius: 4px; margin-bottom: 8px; }
+.sku-checkbox, .sku-select-all { width: 16px; height: 16px; cursor: pointer; accent-color: #2c3e50; }
+.sku-delete-bar { display: none; justify-content: space-between; align-items: center; padding: 6px 12px; background: #f8f9fa; border-radius: 4px; margin-bottom: 8px; }
 .sku-delete-bar.show { display: flex; }
 .confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 3000; display: flex; align-items: center; justify-content: center; }
 .confirm-box { background: #fff; border-radius: 8px; padding: 24px; width: 380px; max-width: 92vw; box-shadow: 0 8px 32px rgba(0,0,0,0.2); text-align: center; }
 .confirm-box .btn-row { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
 </style>
 
+<div class="list-freeze-page">
+
 <!-- 操作栏 -->
-<div class="card mb-3">
+<div class="card mb-3 sticky-list-toolbar">
   <div class="card-body">
     <form method="GET" action="{{ url_for('sku.list_sku') }}" class="search-bar">
       <input type="text" name="keyword" class="form-control" placeholder="搜索 SKU 或品名..."
              value="{{ keyword or '' }}">
       <input type="hidden" name="sort" value="{{ sort_by }}">
       <input type="hidden" name="dir" value="{{ sort_dir }}">
-      <button type="submit" class="btn btn-primary">搜索</button>
+      <button type="submit" class="btn btn-secondary">搜索</button>
       <a href="{{ url_for('sku.list_sku') }}" class="btn btn-outline-secondary">重置</a>
-      <a href="{{ url_for('sku.list_sku', sort='sku_group', dir='asc') }}" class="btn btn-sm {{ 'btn-primary' if sort_by == 'sku_group' else 'btn-outline-primary' }}">产品分组</a>
-      <a href="{{ url_for('sku.new_sku') }}" class="btn btn-success ms-auto">+ 新增 SKU</a>
+      <a href="{{ url_for('sku.list_sku', sort='sku_group', dir='asc') }}" class="btn btn-sm {{ 'btn-secondary' if sort_by == 'sku_group' else 'btn-outline-secondary' }}">产品分组</a>
+      <a href="{{ url_for('sku.new_sku') }}" class="btn btn-secondary ms-auto">新增 SKU</a>
     </form>
   </div>
 </div>
@@ -41,7 +43,7 @@
   <div class="card-body d-flex flex-wrap gap-2 align-items-center">
     <form method="POST" action="{{ url_for('sku.import_sku') }}" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
       <input type="file" name="file" accept=".xlsx,.xls" class="form-control form-control-sm" style="width:auto;" required>
-      <button type="submit" class="btn btn-outline-primary btn-sm">导入 Excel</button>
+      <button type="submit" class="btn btn-outline-secondary btn-sm">导入 Excel</button>
     </form>
     <a href="{{ url_for('sku.template_sku') }}" class="btn btn-outline-secondary btn-sm">下载导入模板</a>
     <a href="{{ url_for('sku.export_sku') }}" class="btn btn-outline-info btn-sm">导出全部</a>
@@ -50,11 +52,11 @@
 
 <!-- SKU 表格 -->
 <div class="sku-delete-bar" id="skuDeleteBar">
-  <span style="font-size:12px;color:#1a73e8;">已选 <strong id="skuSelectedCount">0</strong> 项</span>
+  <span style="font-size:12px;color:#2c3e50;">已选 <strong id="skuSelectedCount">0</strong> 项</span>
   <button type="button" class="btn btn-sm btn-danger" id="btnBatchDelete" onclick="handleBatchDelete()">删除选中</button>
 </div>
 
-<div class="card">
+<div class="card list-freeze-card">
   <div class="table-responsive">
     <table class="table table-hover">
       <thead>
@@ -92,7 +94,7 @@
             </td>
             <td class="text-muted">{{ p.remarks or '-' }}</td>
             <td class="actions">
-              <a href="{{ url_for('sku.edit_sku', id=p.id) }}" class="btn btn-sm btn-outline-primary">编辑</a>
+              <a href="{{ url_for('sku.edit_sku', id=p.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
               <form method="POST" action="{{ url_for('sku.delete_sku', id=p.id) }}" style="display:inline;"
                     onsubmit="return confirm('确定要删除 SKU {{ p.sku }} 吗？');">
                 <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
@@ -103,10 +105,9 @@
         {% else %}
           <tr><td colspan="12">
             <div class="empty-state">
-              <div class="empty-icon">&#128230;</div>
               <p>{% if keyword %}没有找到匹配的 SKU{% else %}暂无 SKU 数据{% endif %}</p>
               {% if not keyword %}
-              <a href="{{ url_for('sku.new_sku') }}" class="btn btn-primary">添加第一个 SKU</a>
+              <a href="{{ url_for('sku.new_sku') }}" class="btn btn-secondary">添加第一个 SKU</a>
               {% endif %}
             </div>
           </td></tr>
@@ -158,6 +159,8 @@
       {% endif %}
     </div>
   </div>
+</div>
+
 </div>
 
 <script>

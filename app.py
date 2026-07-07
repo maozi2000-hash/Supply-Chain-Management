@@ -7,6 +7,18 @@ from config import UPLOAD_FOLDER, EXPORT_FOLDER, DATA_DIR
 from models import db, User
 
 
+def ensure_schema(app):
+    """Add lightweight columns for existing local SQLite databases."""
+    with app.app_context():
+        with db.engine.connect() as conn:
+            columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(booking_records)").fetchall()]
+            if "eta" not in columns:
+                conn.exec_driver_sql("ALTER TABLE booking_records ADD COLUMN eta VARCHAR(100)")
+                conn.commit()
+            conn.exec_driver_sql("UPDATE booking_records SET status = '已订舱' WHERE status = '已出运'")
+            conn.commit()
+
+
 def create_app():
     app = Flask(__name__)
     app.secret_key = SECRET_KEY
@@ -65,7 +77,7 @@ def create_app():
     @app.route("/index")
     def index():
         from flask_login import current_user
-        from models import Order
+        from models import Order, BookingRecord
         from sqlalchemy import func
 
         if not current_user.is_authenticated:
@@ -76,6 +88,10 @@ def create_app():
         rows = db.session.query(Order.status, func.count(Order.id)).group_by(Order.status).all()
         status_counts = {status: count for status, count in rows}
         recent_orders = Order.query.order_by(Order.created_at.desc()).limit(5).all()
+        recent_bookings = BookingRecord.query.filter(
+            BookingRecord.eta.isnot(None),
+            BookingRecord.eta != ""
+        ).order_by(BookingRecord.id.desc()).limit(6).all()
 
         return render_template(
             "index.html",
@@ -83,11 +99,13 @@ def create_app():
             total_orders=total_orders,
             status_counts=status_counts,
             recent_orders=recent_orders,
+            recent_bookings=recent_bookings,
         )
 
     # 创建数据库表 + 默认管理员
     with app.app_context():
         db.create_all()
+        ensure_schema(app)
         create_default_admin(app)
 
     return app

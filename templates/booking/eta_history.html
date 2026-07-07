@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}ETA 历史 — 供应商管理系统{% endblock %}
+{% block page_title %}ETA 历史{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+  <div class="card-header">
+    <span>订舱记录</span>
+    <a href="{{ url_for('booking.edit_booking', id=booking.id) }}" class="btn btn-sm btn-outline-secondary">返回编辑</a>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-sm-6 col-lg-3"><label class="form-label">订单号</label><p>{% if booking.order %}{{ booking.order.order_no }}{% else %}-{% endif %}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">柜名</label><p>{{ booking.custom_name or '-' }}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">当前 ETA</label><p class="fw-bold">{{ booking.eta or '-' }}</p></div>
+      <div class="col-sm-6 col-lg-3"><label class="form-label">状态</label><p><span class="badge badge-status status-{{ booking.status }}">{{ booking.status }}</span></p></div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">变更记录</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>变更时间</th>
+          <th>原 ETA</th>
+          <th>新 ETA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if history %}
+          {% for h in history %}
+          <tr>
+            <td class="text-muted">{{ h.changed_at.strftime('%Y-%m-%d %H:%M') if h.changed_at else '' }}</td>
+            <td>{{ h.old_eta or '-' }}</td>
+            <td class="fw-bold">{{ h.new_eta or '-' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="3"><div class="empty-state py-3"><p class="mb-0">暂无 ETA 变更记录</p></div></td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

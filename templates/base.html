@@ -13,8 +13,7 @@
   <!-- ===== 侧边栏 ===== -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-brand">
-      <span class="brand-icon">S</span>
-      供应商管理
+      <img class="brand-logo" src="{{ url_for('static', filename='img/actpie-logo-cutout.png') }}" alt="Actpie">
     </div>
 
     <div class="sidebar-section">主菜单</div>
@@ -37,7 +36,7 @@
       </a></li>
 
       <li><a href="{{ url_for('sku.list_sku') }}" class="{% if active_menu == 'sku' %}active{% endif %}">
-        <span class="nav-icon">&#9632;</span> SKU产品库
+        <span class="nav-icon">&#9632;</span> 产品管理
       </a></li>
     </ul>
   </aside>
