@@ -25,6 +25,18 @@ ORDER_STATUS_OPTIONS = [
 
 ALL_STATUS_VALUES = [v for v, _ in ORDER_STATUS_OPTIONS]
 
+ORDER_DETAIL_SOURCE_LABELS = {
+    "booking": "订舱",
+    "container": "装柜",
+}
+
+
+def _order_detail_context():
+    source = (request.args.get("source") or request.args.get("from") or "orders").strip()
+    if source not in {"orders", "booking", "container"}:
+        source = "orders"
+    return source, ORDER_DETAIL_SOURCE_LABELS.get(source, "")
+
 
 # ============================================================
 # 列表
@@ -263,6 +275,7 @@ def order_detail(id):
     if not order:
         flash("订单不存在", "error")
         return redirect(url_for("orders.list_orders"))
+    detail_source, detail_source_label = _order_detail_context()
 
     items = order.items
     total_quantity = sum(it.quantity for it in items)
@@ -275,7 +288,9 @@ def order_detail(id):
 
     return render_template(
         "orders/detail.html",
-        active_menu="orders",
+        active_menu=detail_source,
+        detail_source=detail_source,
+        detail_source_label=detail_source_label,
         order=order,
         items=items,
         total_quantity=total_quantity,

@@ -23,8 +23,8 @@ if not errorlevel 1 (
   timeout /t 2 /nobreak >nul
 )
 
-echo [2/3] Starting Flask...
-start "SCM" /MIN cmd /c ".venv\Scripts\python.exe app.py"
+echo [2/3] Starting Flask (hidden window)...
+start "" /B ".venv\Scripts\pythonw.exe" app.py > server.log 2>&1
 echo   Waiting for server...
 timeout /t 4 /nobreak >nul
 

@@ -197,6 +197,7 @@ def list_booking():
 @booking_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new_booking():
+    view_only = request.args.get("view") == "1"
     pending_subq = db.session.query(BookingRecord.order_id).distinct()
     pending_orders = Order.query.filter(
         ~Order.id.in_(pending_subq)
@@ -229,7 +230,8 @@ def new_booking():
         if not order_id:
             flash("请选择关联订单", "error")
             return render_template("booking/form.html", active_menu="booking", booking=None, orders=orders,
-                                   target_order=target_order, pending_orders=pending_orders, prefill=prefill)
+                                   target_order=target_order, pending_orders=pending_orders, prefill=prefill,
+                                   view_only=view_only)
         br = BookingRecord(
             custom_name=custom_name, vessel_voyage=vessel_voyage, bl_no=bl_no,
             shipping_company=shipping_company,
@@ -249,7 +251,32 @@ def new_booking():
         flash("订舱记录创建成功", "success")
         return redirect(url_for("booking.list_booking"))
     return render_template("booking/form.html", active_menu="booking", booking=None, orders=orders,
-                           target_order=target_order, pending_orders=pending_orders, prefill=prefill)
+                           target_order=target_order, pending_orders=pending_orders, prefill=prefill,
+                           view_only=view_only)
+
+
+@booking_bp.route("/<int:id>")
+@login_required
+def booking_detail(id):
+    booking = db.session.get(BookingRecord, id)
+    if not booking:
+        flash("订舱记录不存在", "error")
+        return redirect(url_for("booking.list_booking"))
+    orders = Order.query.order_by(Order.created_at.desc()).all()
+    eta_history_rows = BookingEtaHistory.query.filter_by(booking_record_id=id).order_by(
+        BookingEtaHistory.changed_at.desc()
+    ).all()
+    return render_template(
+        "booking/form.html",
+        active_menu="booking",
+        booking=booking,
+        orders=orders,
+        target_order=booking.order,
+        pending_orders=[],
+        selected_order_id=str(booking.order_id) if booking.order_id else "",
+        view_only=True,
+        eta_history_rows=eta_history_rows,
+    )
 
 
 @booking_bp.route("/<int:id>/edit", methods=["GET", "POST"])
@@ -289,7 +316,8 @@ def edit_booking(id):
         flash("订舱记录更新成功", "success")
         return redirect(url_for("booking.list_booking"))
     return render_template("booking/form.html", active_menu="booking", booking=booking, orders=orders,
-                           target_order=booking.order, pending_orders=[], selected_order_id=str(booking.order_id) if booking.order_id else "")
+                           target_order=booking.order, pending_orders=[], selected_order_id=str(booking.order_id) if booking.order_id else "",
+                           view_only=False)
 
 
 @booking_bp.route("/<int:id>/eta-history")

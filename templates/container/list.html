@@ -17,10 +17,175 @@
   .sku-delete-bar.show { display: flex; }
   .ctnr-checkbox, .ctnr-select-all { width: 16px; height: 16px; cursor: pointer; accent-color: #2c3e50; }
   tr.row-pending { background: #f8f9fa; }
+
+  .container-table-scroll {
+    overflow-x: auto;
+  }
+  .container-table {
+    min-width: 1180px;
+  }
+  .container-table th,
+  .container-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .container-table .actions {
+    position: sticky;
+    right: 0;
+    z-index: 20;
+    width: 168px;
+    min-width: 168px;
+    max-width: 168px;
+    text-align: right;
+    background: #fff !important;
+    box-shadow: -10px 0 14px rgba(44, 62, 80, 0.08);
+  }
+  .container-table .actions::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    background: inherit;
+    pointer-events: none;
+  }
+  .container-table thead .actions {
+    z-index: 40;
+    background: #f8f9fa !important;
+    text-align: right;
+  }
+  .container-table .actions::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    background: inherit;
+    pointer-events: none;
+  }
+  .container-table thead .actions {
+    background: transparent;
+    text-align: right;
+  }
+  .container-actions-spacer {
+    width: 168px;
+    min-width: 168px;
+    padding: 0 !important;
+    color: transparent;
+  }
+  .container-table-panel {
+    position: relative;
+    isolation: isolate;
+  }
+  .container-table-panel .container-table-scroll {
+    position: relative;
+    z-index: 1;
+  }
+  .container-column-config-btn {
+    width: 26px;
+    height: 24px;
+    border: 1px solid #cfd8e3;
+    background: #fff;
+    color: #2c3e50;
+    border-radius: 4px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 22px;
+    text-align: center;
+  }
+  .container-column-config-btn:hover {
+    border-color: #2c3e50;
+  }
+  .container-column-config-floating {
+    position: fixed !important;
+    top: 110px !important;
+    right: 24px !important;
+    z-index: 1050 !important;
+  }
+  .container-actions-cover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 60;
+    width: 168px;
+    height: 44px;
+    background: #f8f9fa;
+    border-left: 1px solid #e5e9ef;
+    pointer-events: none;
+  }
+  .container-column-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.22);
+  }
+  .container-column-modal-backdrop.show {
+    display: flex;
+  }
+  .container-column-modal {
+    width: min(760px, 94vw);
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #d8e0ea;
+    border-radius: 6px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  }
+  .container-column-modal-header,
+  .container-column-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #edf1f5;
+  }
+  .container-column-modal-footer {
+    border-top: 1px solid #edf1f5;
+    border-bottom: 0;
+  }
+  .container-column-groups {
+    overflow: auto;
+    padding: 14px 16px;
+  }
+  .container-column-group + .container-column-group {
+    margin-top: 16px;
+  }
+  .container-column-group-title {
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-weight: 600;
+  }
+  .container-column-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px 18px;
+  }
+  .container-column-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #334155;
+    font-size: 13px;
+  }
+  .container-column-option input {
+    width: 15px;
+    height: 15px;
+    accent-color: #2c3e50;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
+
+<!-- 列配置 浮按（fixed，置于 list-freeze-page 之外，脱离 panel 的 overflow:hidden） -->
+<button type="button" class="container-column-config-btn container-column-config-floating" data-column-config title="列配置" aria-label="列配置">⚙</button>
 
 <div class="list-freeze-page">
 
@@ -84,28 +249,33 @@
 
 <div class="sku-delete-bar" id="containerSelectBar">
   <span style="font-size:12px;color:#2c3e50;">已选 <strong id="containerSelectedCount">0</strong> 项</span>
-  <button type="button" class="btn btn-sm btn-outline-secondary" id="btnExportSelected" onclick="exportSelectedContainers();" disabled>导出所选</button>
+  <div class="d-flex gap-2">
+    <button type="button" class="btn btn-sm btn-outline-warning" id="btnImportFeesSelected" onclick="openImportFeesForSelected();" disabled title="先勾选已装柜行再导入费用">导入所选费用</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnExportSelected" onclick="exportSelectedContainers();" disabled>导出所选</button>
+  </div>
 </div>
 
 {% if any_filter %}
 {# 筛选模式：单表混合（无分页） #}
-<div class="card mb-3 sku-result-card list-freeze-card">
+<div class="card mb-3 sku-result-card list-freeze-card container-table-panel">
+  <div class="container-actions-cover"></div>
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>筛选条件：{{ filter_summary or '无' }} · 命中 {{ unified_search_results|length }} 条</span>
   </div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+  <div class="container-table-scroll">
+    <table class="table table-hover mb-0 container-table">
       <thead>
         <tr>
           <th style="width:32px;"><input type="checkbox" class="ctnr-select-all"></th>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>客户名</th>
-          <th>柜号</th>
-          <th>装柜日期</th>
-          <th>件数</th>
-          <th>匹配</th>
+          <th data-col="record_state">状态</th>
+          <th data-col="order_no">订单号</th>
+          <th data-col="supplier">供应商</th>
+          <th data-col="custom_name">客户名</th>
+          <th data-col="container_no">柜号</th>
+          <th data-col="loading_date">装柜日期</th>
+          <th data-col="cargo_count">件数</th>
+          <th data-col="matched_count">匹配</th>
+          <th class="container-actions-spacer" aria-hidden="true"></th>
           <th class="actions">操作</th>
         </tr>
       </thead>
@@ -116,16 +286,19 @@
           {% set cr = r.container %}
           <tr id="row-{{ cr.id }}" data-container-id="{{ cr.id }}" data-type="container">
             <td><input type="checkbox" class="ctnr-checkbox" data-type="container" data-id="{{ cr.id }}"></td>
-            <td><span class="badge bg-light text-dark border">已装柜</span></td>
-            <td>{% if cr.order %}<a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>{% else %}-{% endif %}</td>
-            <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
-            <td>{{ cr.order.custom_name if cr.order else '-' }}</td>
-            <td><strong>{{ cr.container_no }}</strong></td>
-            <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '-' }}</td>
-            <td>{{ cr.cargo_count }}</td>
-            <td><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td data-col="record_state"><span class="badge bg-light text-dark border">已装柜</span></td>
+            <td data-col="order_no">{% if cr.order %}<a href="{{ url_for('container.container_detail', id=cr.id) }}">{{ cr.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td data-col="supplier">{{ cr.order.supplier_name if cr.order else '-' }}</td>
+            <td data-col="custom_name">{{ cr.order.custom_name if cr.order else '-' }}</td>
+            <td data-col="container_no"><strong>{{ cr.container_no }}</strong></td>
+            <td data-col="loading_date">{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '-' }}</td>
+            <td data-col="cargo_count">{{ cr.cargo_count }}</td>
+            <td data-col="matched_count"><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td class="container-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
               <a href="javascript:void(0);" onclick="toggleContainerItems({{ cr.id }});" class="btn btn-sm btn-outline-dark btn-toggle">展开</a>
+              <button type="button" class="btn btn-sm btn-outline-warning"
+                      onclick='openFeeModal({{ cr.id }}, {{ cr.container_no|tojson }}, {{ r.fees|tojson }})'>费用</button>
               <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
             </td>
           </tr>
@@ -133,23 +306,24 @@
           {% set o = r.order %}
           <tr class="row-pending" data-type="order">
             <td><input type="checkbox" class="ctnr-checkbox" data-type="order" data-id="{{ o.id }}"></td>
-            <td><span class="badge bg-light text-secondary border">待装柜</span></td>
-            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-            <td>{{ o.supplier_name }}</td>
-            <td>{{ o.custom_name or '-' }}</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td data-col="record_state"><span class="badge bg-light text-secondary border">待装柜</span></td>
+            <td data-col="order_no"><a href="{{ url_for('container.new_container', order_id=o.id, view=1) }}">{{ o.order_no }}</a></td>
+            <td data-col="supplier">{{ o.supplier_name }}</td>
+            <td data-col="custom_name">{{ o.custom_name or '-' }}</td>
+            <td data-col="container_no" class="text-muted">-</td>
+            <td data-col="loading_date" class="text-muted">-</td>
+            <td data-col="cargo_count" class="text-muted">-</td>
+            <td data-col="matched_count"><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td class="container-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
-              <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('container.new_container', order_id=o.id, view=1) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('container.new_container', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">装柜</a>
             </td>
           </tr>
           {% endif %}
           {% endfor %}
         {% else %}
-        <tr><td colspan="10">
+        <tr><td colspan="16">
           <div class="text-center text-muted py-4">没有记录匹配当前筛选条件</div>
         </td></tr>
         {% endif %}
@@ -160,22 +334,24 @@
 
 {% else %}
 {# 默认视图：单表混合（未装柜 + 已装柜分页） #}
-<div class="card list-freeze-card">
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+<div class="card list-freeze-card container-table-panel">
+  <div class="container-actions-cover"></div>
+  <div class="container-table-scroll">
+    <table class="table table-hover mb-0 container-table">
       <thead>
         <tr>
           <th style="width:32px;"><input type="checkbox" class="ctnr-select-all"></th>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>客户名</th>
-          <th>柜号</th>
-          <th>装柜日期</th>
-          <th>件数</th>
-          <th>毛重(KG)</th>
-          <th>体积(CBM)</th>
-          <th>图片</th>
+          <th data-col="record_state">状态</th>
+          <th data-col="order_no">订单号</th>
+          <th data-col="supplier">供应商</th>
+          <th data-col="custom_name">客户名</th>
+          <th data-col="container_no">柜号</th>
+          <th data-col="loading_date">装柜日期</th>
+          <th data-col="cargo_count">件数</th>
+          <th data-col="weight">毛重(KG)</th>
+          <th data-col="volume">体积(CBM)</th>
+          <th data-col="images">图片</th>
+          <th class="container-actions-spacer" aria-hidden="true"></th>
           <th class="actions">操作</th>
         </tr>
       </thead>
@@ -186,18 +362,19 @@
           {% set o = r.order %}
           <tr class="row-pending" data-type="order">
             <td><input type="checkbox" class="ctnr-checkbox" data-type="order" data-id="{{ o.id }}"></td>
-            <td><span class="badge bg-light text-secondary border">待装柜</span></td>
-            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-            <td>{{ o.supplier_name }}</td>
-            <td>{{ o.custom_name or '-' }}</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
+            <td data-col="record_state"><span class="badge bg-light text-secondary border">待装柜</span></td>
+            <td data-col="order_no"><a href="{{ url_for('container.new_container', order_id=o.id, view=1) }}">{{ o.order_no }}</a></td>
+            <td data-col="supplier">{{ o.supplier_name }}</td>
+            <td data-col="custom_name">{{ o.custom_name or '-' }}</td>
+            <td data-col="container_no" class="text-muted">-</td>
+            <td data-col="loading_date" class="text-muted">-</td>
+            <td data-col="cargo_count" class="text-muted">-</td>
+            <td data-col="weight" class="text-muted">-</td>
+            <td data-col="volume" class="text-muted">-</td>
+            <td data-col="images" class="text-muted">-</td>
+            <td class="container-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
-              <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('container.new_container', order_id=o.id, view=1) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('container.new_container', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">装柜</a>
             </td>
           </tr>
@@ -205,17 +382,20 @@
           {% set cr = r.container %}
           <tr data-type="container">
             <td><input type="checkbox" class="ctnr-checkbox" data-type="container" data-id="{{ cr.id }}"></td>
-            <td><span class="badge bg-light text-dark border">已装柜</span></td>
-            <td>{% if cr.order %}<a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>{% else %}-{% endif %}</td>
-            <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
-            <td>{{ cr.order.custom_name if cr.order else '-' }}</td>
-            <td>{{ cr.container_no }}</td>
-            <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '' }}</td>
-            <td>{{ cr.cargo_count }}</td>
-            <td>{{ '%.2f'|format(cr.weight) if cr.weight else '' }}</td>
-            <td>{{ '%.2f'|format(cr.volume) if cr.volume else '' }}</td>
-            <td>{{ cr.images|length if cr.images else 0 }}</td>
+            <td data-col="record_state"><span class="badge bg-light text-dark border">已装柜</span></td>
+            <td data-col="order_no">{% if cr.order %}<a href="{{ url_for('container.container_detail', id=cr.id) }}">{{ cr.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td data-col="supplier">{{ cr.order.supplier_name if cr.order else '-' }}</td>
+            <td data-col="custom_name">{{ cr.order.custom_name if cr.order else '-' }}</td>
+            <td data-col="container_no">{{ cr.container_no }}</td>
+            <td data-col="loading_date">{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '' }}</td>
+            <td data-col="cargo_count">{{ cr.cargo_count }}</td>
+            <td data-col="weight">{{ '%.2f'|format(cr.weight) if cr.weight else '' }}</td>
+            <td data-col="volume">{{ '%.2f'|format(cr.volume) if cr.volume else '' }}</td>
+            <td data-col="images">{{ cr.images|length if cr.images else 0 }}</td>
+            <td class="container-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
+              <button type="button" class="btn btn-sm btn-outline-warning"
+                      onclick='openFeeModal({{ cr.id }}, {{ cr.container_no|tojson }}, {{ r.fees|tojson }})'>费用</button>
               <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
               <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">导出</a>
@@ -227,7 +407,7 @@
           {% endif %}
           {% endfor %}
         {% else %}
-        <tr><td colspan="12">
+        <tr><td colspan="16">
           <div class="text-center text-muted py-5">
             <p class="mb-2">暂无订单和装柜记录</p>
             <a href="{{ url_for('container.new_container') }}" class="btn btn-sm btn-outline-dark">创建第一条</a>
@@ -245,7 +425,7 @@
         <span class="text-muted" style="font-size:13px;">每页</span>
         <select class="form-select form-select-sm" style="width:80px;" onchange="changePerPage(this.value)">
           {% for n in [20, 50, 100, 200] %}
-          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+          <option value="{{ n }}" {% if per_page == n %}selected{% endif %}">{{ n }}</option>
           {% endfor %}
         </select>
         <span class="text-muted" style="font-size:13px;">条</span>
@@ -286,6 +466,113 @@
 
 </div>
 
+<!-- 列配置 模态框 -->
+<div class="container-column-modal-backdrop" id="containerColumnModal" aria-hidden="true">
+  <div class="container-column-modal" role="dialog" aria-modal="true" aria-labelledby="containerColumnModalTitle">
+    <div class="container-column-modal-header">
+      <h5 class="mb-0" id="containerColumnModalTitle">列配置</h5>
+      <button type="button" class="btn-close" aria-label="关闭" data-column-cancel></button>
+    </div>
+    <div class="container-column-groups" id="containerColumnGroups"></div>
+    <div class="container-column-modal-footer">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="containerColumnReset">恢复默认</button>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-column-cancel>取消</button>
+        <button type="button" class="btn btn-sm btn-secondary" id="containerColumnSave">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 费用管理 模态框 -->
+<div class="modal-overlay" id="feeModal" style="display:none;">
+  <div class="modal-box" style="width:680px;max-width:94vw;">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">订单费用 <small class="text-muted" id="feeModalSubtitle"></small></h5>
+      <button type="button" class="btn-close" onclick="closeFeeModal()">×</button>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" id="feeTabManualBtn" data-bs-toggle="tab" href="#feeTabManual" role="tab">手动输入</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" id="feeTabImportBtn" data-bs-toggle="tab" href="#feeTabImport" role="tab">表格导入</a>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- 手动输入 -->
+      <div class="tab-pane fade show active" id="feeTabManual" role="tabpanel">
+        <form id="feeManualForm">
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small mb-1">国内运输费用 (¥)</label>
+              <input type="number" step="0.01" min="0" name="domestic_transport_fee" class="form-control form-control-sm fee-input">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">海运费 (¥)</label>
+              <input type="number" step="0.01" min="0" name="ocean_freight_fee" class="form-control form-control-sm fee-input">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">国外拖车费 (¥)</label>
+              <input type="number" step="0.01" min="0" name="overseas_truck_fee" class="form-control form-control-sm fee-input">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">上架费 (¥)</label>
+              <input type="number" step="0.01" min="0" name="shelving_fee" class="form-control form-control-sm fee-input">
+            </div>
+            <div class="col-6">
+              <label class="form-label small mb-1">其他费用 (¥)</label>
+              <input type="number" step="0.01" min="0" name="other_fee" class="form-control form-control-sm fee-input">
+            </div>
+            <div class="col-12">
+              <label class="form-label small mb-1">备注（解释"其他费用"或其他说明）</label>
+              <textarea name="fee_remark" class="form-control form-control-sm" rows="2"></textarea>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mt-3 pt-3" style="border-top:1px solid #e5e9ef;">
+            <div>
+              <span class="text-muted small">总价：</span>
+              <strong id="feeTotalDisplay" style="color:#c5221f;font-size:18px;">¥0.00</strong>
+            </div>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeFeeModal()">取消</button>
+              <button type="submit" class="btn btn-primary btn-sm" id="feeSaveBtn">保存</button>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <!-- 表格导入 -->
+      <div class="tab-pane fade" id="feeTabImport" role="tabpanel">
+        <div class="alert alert-info py-2 small mb-3">
+          支持 .xlsx 文件，列：<strong>柜号 / 提单号</strong>（二选一）+ 5 项费用。空字段视为 0（覆盖式）。<br>
+          未填写 <a href="{{ url_for('container.template_fees') }}" class="alert-link">下载模板</a>。
+        </div>
+        <div class="upload-zone" onclick="document.getElementById('feeImportFile').click();" style="cursor:pointer;">
+          <div class="upload-icon"></div>
+          <p class="mb-1">点击选择 Excel 文件</p>
+          <p class="text-muted small mb-0" id="feeImportFileName">未选择文件</p>
+          <input type="file" id="feeImportFile" accept=".xlsx,.xls" hidden
+                 onchange="document.getElementById('feeImportFileName').textContent = this.files[0] ? this.files[0].name : '未选择文件';">
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button type="button" class="btn btn-primary btn-sm" onclick="uploadFeeExcel()">上传并匹配</button>
+          <a href="{{ url_for('container.template_fees') }}" class="btn btn-outline-secondary btn-sm">下载模板</a>
+        </div>
+        <div id="feeImportResult" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.fee-modal-tab { padding: 8px 16px; cursor: pointer; border-bottom: 2px solid transparent; }
+.fee-modal-tab.active { border-bottom-color: #2c3e50; color: #2c3e50; font-weight: 600; }
+</style>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -312,7 +599,7 @@ function expandRow(containerId) {
   tr.className = "expand-row";
   tr.id = "expand-" + containerId;
   var td = document.createElement("td");
-  td.colSpan = 10;
+  td.colSpan = 16;
   td.innerHTML = '<div class="text-muted small p-2">加载中...</div>';
   tr.appendChild(td);
   row.parentNode.insertBefore(tr, row.nextSibling);
@@ -366,6 +653,7 @@ function updateContainerBar() {
   if (el) el.textContent = n;
   var bar = document.getElementById("containerSelectBar");
   var btn = document.getElementById("btnExportSelected");
+  var importBtn = document.getElementById("btnImportFeesSelected");
   if (bar) {
     if (n > 0) bar.classList.add("show");
     else bar.classList.remove("show");
@@ -373,6 +661,12 @@ function updateContainerBar() {
   if (btn) {
     btn.disabled = (n === 0);
     btn.textContent = n > 0 ? "导出所选（" + n + "）" : "导出所选";
+  }
+  // 导入所选费用：仅在勾选了"已装柜"行时可点
+  if (importBtn) {
+    var nContainer = document.querySelectorAll('.ctnr-checkbox[data-type="container"]:checked').length;
+    importBtn.disabled = (nContainer === 0);
+    importBtn.textContent = nContainer > 0 ? "导入所选费用（" + nContainer + "）" : "导入所选费用";
   }
   var chkAll = document.querySelector(".ctnr-select-all");
   if (chkAll) {
@@ -397,6 +691,142 @@ function exportSelectedContainers() {
   if (containerIds.length) url += "container_ids=" + containerIds.join(",");
   window.location.href = url;
 }
+
+// ===== 列配置 =====
+var CONTAINER_COLUMN_STORAGE_KEY = "container.visibleColumns";
+var CONTAINER_COLUMN_GROUPS = [
+  {
+    title: "基础信息",
+    columns: [
+      { key: "record_state", label: "状态", defaultVisible: true },
+      { key: "order_no", label: "订单号", defaultVisible: true },
+      { key: "supplier", label: "供应商", defaultVisible: true },
+      { key: "custom_name", label: "客户名", defaultVisible: true },
+      { key: "container_no", label: "柜号", defaultVisible: true }
+    ]
+  },
+  {
+    title: "装柜详情",
+    columns: [
+      { key: "loading_date", label: "装柜日期", defaultVisible: true },
+      { key: "cargo_count", label: "件数", defaultVisible: true },
+      { key: "weight", label: "毛重(KG)", defaultVisible: true },
+      { key: "volume", label: "体积(CBM)", defaultVisible: true },
+      { key: "images", label: "图片", defaultVisible: true },
+      { key: "matched_count", label: "匹配", defaultVisible: true }
+    ]
+  }
+];
+
+function getAllContainerColumns() {
+  return CONTAINER_COLUMN_GROUPS.reduce(function(cols, group) {
+    return cols.concat(group.columns);
+  }, []);
+}
+
+function getDefaultContainerVisibleColumns() {
+  return getAllContainerColumns()
+    .filter(function(col) { return col.defaultVisible; })
+    .map(function(col) { return col.key; });
+}
+
+function loadContainerVisibleColumns() {
+  var allKeys = getAllContainerColumns().map(function(col) { return col.key; });
+  try {
+    var raw = localStorage.getItem(CONTAINER_COLUMN_STORAGE_KEY);
+    if (!raw) return getDefaultContainerVisibleColumns();
+    var stored = JSON.parse(raw);
+    if (!Array.isArray(stored)) return getDefaultContainerVisibleColumns();
+    return stored.filter(function(key) { return allKeys.indexOf(key) !== -1; });
+  } catch (err) {
+    return getDefaultContainerVisibleColumns();
+  }
+}
+
+function saveContainerVisibleColumns(columns) {
+  localStorage.setItem(CONTAINER_COLUMN_STORAGE_KEY, JSON.stringify(columns));
+}
+
+function applyContainerVisibleColumns(columns) {
+  var visible = new Set(columns);
+  document.querySelectorAll("[data-col]").forEach(function(cell) {
+    cell.style.display = visible.has(cell.getAttribute("data-col")) ? "" : "none";
+  });
+}
+
+function openContainerColumnModal() {
+  var modal = document.getElementById("containerColumnModal");
+  if (!modal) return;
+  var visible = new Set(loadContainerVisibleColumns());
+  document.querySelectorAll(".container-column-checkbox").forEach(function(input) {
+    input.checked = visible.has(input.value);
+  });
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeContainerColumnModal() {
+  var modal = document.getElementById("containerColumnModal");
+  if (!modal) return;
+  modal.classList.remove("show");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function renderContainerColumnOptions() {
+  var container = document.getElementById("containerColumnGroups");
+  if (!container) return;
+  var visible = new Set(loadContainerVisibleColumns());
+  container.innerHTML = CONTAINER_COLUMN_GROUPS.map(function(group) {
+    var options = group.columns.map(function(col) {
+      var checked = visible.has(col.key) ? "checked" : "";
+      return '<label class="container-column-option">' +
+        '<input type="checkbox" class="container-column-checkbox" value="' + col.key + '" ' + checked + '>' +
+        '<span>' + col.label + '</span>' +
+      '</label>';
+    }).join("");
+    return '<div class="container-column-group">' +
+      '<div class="container-column-group-title">' + group.title + '</div>' +
+      '<div class="container-column-options">' + options + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function initContainerColumns() {
+  renderContainerColumnOptions();
+  applyContainerVisibleColumns(loadContainerVisibleColumns());
+  document.querySelectorAll("[data-column-config]").forEach(function(btn) {
+    btn.addEventListener("click", openContainerColumnModal);
+  });
+  document.querySelectorAll("[data-column-cancel]").forEach(function(btn) {
+    btn.addEventListener("click", closeContainerColumnModal);
+  });
+  var modal = document.getElementById("containerColumnModal");
+  if (modal) {
+    modal.addEventListener("click", function(e) {
+      if (e.target === modal) closeContainerColumnModal();
+    });
+  }
+  var saveBtn = document.getElementById("containerColumnSave");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", function() {
+      var selected = Array.from(document.querySelectorAll(".container-column-checkbox:checked"))
+        .map(function(input) { return input.value; });
+      saveContainerVisibleColumns(selected);
+      applyContainerVisibleColumns(selected);
+      closeContainerColumnModal();
+    });
+  }
+  var resetBtn = document.getElementById("containerColumnReset");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function() {
+      var defaults = getDefaultContainerVisibleColumns();
+      saveContainerVisibleColumns(defaults);
+      renderContainerColumnOptions();
+      applyContainerVisibleColumns(defaults);
+    });
+  }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
   var chkAll = document.querySelector(".ctnr-select-all");
   if (chkAll) {
@@ -410,6 +840,190 @@ document.addEventListener("DOMContentLoaded", function() {
     cb.addEventListener("change", updateContainerBar);
   });
   updateContainerBar();
+  initContainerColumns();
+  initFeeModal();
 });
+
+// ============================================================
+// 费用管理 模态框
+// ============================================================
+var FEE_FIELDS = ["domestic_transport_fee", "ocean_freight_fee", "overseas_truck_fee", "shelving_fee", "other_fee"];
+var _feeCurrentId = null;
+
+function initFeeModal() {
+  // 5 个金额 input oninput 实时算总价
+  document.querySelectorAll(".fee-input").forEach(function(input) {
+    input.addEventListener("input", recalcFeeTotal);
+  });
+  // 表单 submit
+  var form = document.getElementById("feeManualForm");
+  if (form) {
+    form.addEventListener("submit", function(e) {
+      e.preventDefault();
+      submitFeeForm();
+    });
+  }
+  // 切换 tab
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach(function(a) {
+    a.addEventListener("click", function(e) {
+      e.preventDefault();
+      var tabs = a.parentElement.parentElement.querySelectorAll(".nav-link");
+      tabs.forEach(function(t) { t.classList.remove("active"); });
+      a.classList.add("active");
+      var panes = a.parentElement.parentElement.parentElement.querySelectorAll(".tab-pane");
+      panes.forEach(function(p) { p.classList.remove("show", "active"); });
+      var target = document.querySelector(a.getAttribute("href"));
+      if (target) target.classList.add("show", "active");
+    });
+  });
+}
+
+function recalcFeeTotal() {
+  var total = 0;
+  FEE_FIELDS.forEach(function(name) {
+    var v = parseFloat(document.querySelector('[name="' + name + '"]').value) || 0;
+    total += v;
+  });
+  document.getElementById("feeTotalDisplay").textContent = "¥" + total.toFixed(2);
+}
+
+function openFeeModal(containerId, containerNo, fees) {
+  _feeCurrentId = containerId;
+  window._feeImportScope = null;  // 单条编辑模式，不是勾选导入
+  document.getElementById("feeModalSubtitle").textContent = "柜号：" + (containerNo || "-");
+  var form = document.getElementById("feeManualForm");
+  form.reset();
+  fees = fees || {};
+  FEE_FIELDS.forEach(function(name) {
+    form.querySelector('[name="' + name + '"]').value = fees[name] || 0;
+  });
+  form.querySelector('[name="fee_remark"]').value = fees.fee_remark || "";
+  document.getElementById("feeImportResult").innerHTML = "";
+  recalcFeeTotal();
+  document.getElementById("feeImportFile").value = "";
+  document.getElementById("feeImportFileName").textContent = "未选择文件";
+  // 切回手动输入 tab
+  document.getElementById("feeTabManualBtn").click();
+  // 显示 modal
+  var modal = document.getElementById("feeModal");
+  modal.style.display = "flex";
+  document.body.classList.add("modal-open");
+}
+
+function closeFeeModal() {
+  var modal = document.getElementById("feeModal");
+  modal.style.display = "none";
+  document.body.classList.remove("modal-open");
+}
+
+function submitFeeForm() {
+  if (!_feeCurrentId) return;
+  var btn = document.getElementById("feeSaveBtn");
+  btn.disabled = true;
+  btn.textContent = "保存中...";
+  var form = document.getElementById("feeManualForm");
+  var fd = new FormData(form);
+  fetch("/container/" + _feeCurrentId + "/save-fees", {
+    method: "POST",
+    body: fd
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    btn.disabled = false;
+    btn.textContent = "保存";
+    if (d.success) {
+      alert("保存成功！总价：¥" + d.total.toFixed(2));
+      closeFeeModal();
+      location.reload();
+    } else {
+      alert("保存失败：" + (d.error || "未知错误"));
+    }
+  })
+  .catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = "保存";
+    alert("请求失败：" + err);
+  });
+}
+
+function uploadFeeExcel() {
+  var fileInput = document.getElementById("feeImportFile");
+  if (!fileInput.files.length) {
+    alert("请选择 Excel 文件");
+    return;
+  }
+  var fd = new FormData();
+  fd.append("file", fileInput.files[0]);
+  // 若由"导入所选费用"按钮触发，附上选中的 container ids（仅对选中的行匹配）
+  if (window._feeImportScope && window._feeImportScope.containerIds && window._feeImportScope.containerIds.length) {
+    fd.append("container_ids", window._feeImportScope.containerIds.join(","));
+  }
+  var resultEl = document.getElementById("feeImportResult");
+  resultEl.innerHTML = '<div class="text-muted small">上传中...</div>';
+  fetch("/container/import-fees", {
+    method: "POST",
+    body: fd
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.success) {
+      resultEl.innerHTML = '<div class="alert alert-danger small py-2">失败：' + (d.error || "未知错误") + '</div>';
+      return;
+    }
+    var html = '<div class="alert alert-success py-2 small mb-2">成功导入 <strong>' + d.success_count + '</strong> 行';
+    if (d.fail_count > 0) {
+      html += ' / 失败 <strong>' + d.fail_count + '</strong> 行';
+    }
+    html += '</div>';
+    if (d.fail_rows && d.fail_rows.length) {
+      html += '<div class="small text-muted mb-1">失败明细：</div>';
+      html += '<ul class="small text-danger" style="padding-left:20px;max-height:160px;overflow-y:auto;">';
+      d.fail_rows.forEach(function(fr) {
+        html += '<li>第 ' + fr.row + ' 行：' + fr.reason + '</li>';
+      });
+      html += '</ul>';
+    }
+    resultEl.innerHTML = html;
+    if (d.success_count > 0) {
+      setTimeout(function() { location.reload(); }, 2500);
+    }
+  })
+  .catch(function(err) {
+    resultEl.innerHTML = '<div class="alert alert-danger small py-2">请求失败：' + err + '</div>';
+  });
+}
+
+// 由"导入所选费用"按钮触发：收集勾选的已装柜 ids，打开模态框并切换到导入 tab
+function openImportFeesForSelected() {
+  var cbs = document.querySelectorAll('.ctnr-checkbox[data-type="container"]:checked');
+  if (!cbs.length) {
+    alert("请先勾选要导入费用的已装柜记录（仅已装柜行）");
+    return;
+  }
+  var ids = Array.from(cbs).map(function(c) { return c.getAttribute("data-id"); });
+  window._feeImportScope = { containerIds: ids };
+
+  var modal = document.getElementById("feeModal");
+  document.getElementById("feeModalSubtitle").textContent =
+    "勾选导入：共 " + ids.length + " 条装柜记录";
+  // 重置表单状态
+  var form = document.getElementById("feeManualForm");
+  if (form) form.reset();
+  document.getElementById("feeImportResult").innerHTML = "";
+  document.getElementById("feeImportFile").value = "";
+  document.getElementById("feeImportFileName").textContent = "未选择文件";
+  // 切到"表格导入" tab
+  var importTabBtn = document.getElementById("feeTabImportBtn");
+  if (importTabBtn) importTabBtn.click();
+  // 顶部加一条提示横幅
+  var bannerHtml = '<div class="alert alert-warning py-2 small mb-3">'
+    + '当前模式：<strong>勾选导入</strong>。本次上传的费用只会更新勾选的 '
+    + '<strong>' + ids.length + '</strong> 条装柜记录，未勾选的不受影响。'
+    + '</div>';
+  document.getElementById("feeImportResult").innerHTML = bannerHtml;
+  // 显示 modal
+  modal.style.display = "flex";
+  document.body.classList.add("modal-open");
+}
 </script>
 {% endblock %}

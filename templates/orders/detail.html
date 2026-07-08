@@ -1,7 +1,7 @@
 {# 订单详情页 #}
 {% extends "base.html" %}
-{% block title %}订单详情 — {{ order.order_no }}{% endblock %}
-{% block page_title %}订单详情：{{ order.order_no }}{% endblock %}
+{% block title %}订单详情 — {{ order.order_no }}{% if detail_source_label %}（{{ detail_source_label }}）{% endif %}{% endblock %}
+{% block page_title %}订单详情：{{ order.order_no }}{% if detail_source_label %}（{{ detail_source_label }}）{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>

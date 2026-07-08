@@ -14,6 +14,158 @@
   .sku-delete-bar.show { display: flex; }
   .bkg-checkbox, .bkg-select-all { width: 16px; height: 16px; cursor: pointer; accent-color: #2c3e50; }
   tr.row-pending { background: #f8f9fa; }
+  .booking-table-scroll {
+    overflow-x: auto;
+  }
+  .booking-table {
+    min-width: 1320px;
+  }
+  .booking-table th,
+  .booking-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .booking-table .actions {
+    position: sticky;
+    right: 0;
+    z-index: 20;
+    width: 168px;
+    min-width: 168px;
+    max-width: 168px;
+    text-align: right;
+    background: #fff !important;
+    box-shadow: -10px 0 14px rgba(44, 62, 80, 0.08);
+  }
+  .booking-table .actions::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    background: inherit;
+    pointer-events: none;
+  }
+  .booking-table thead .actions {
+    z-index: 40;
+    background: #f8f9fa !important;
+    text-align: right;
+  }
+  .booking-actions-spacer {
+    width: 168px;
+    min-width: 168px;
+    padding: 0 !important;
+    color: transparent;
+  }
+  .booking-table-panel {
+    position: relative;
+    isolation: isolate;
+  }
+  .booking-table-panel .booking-table-scroll {
+    position: relative;
+    z-index: 1;
+  }
+  .booking-action-header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .booking-column-config-btn {
+    width: 26px;
+    height: 24px;
+    border: 1px solid #cfd8e3;
+    background: #fff;
+    color: #2c3e50;
+    border-radius: 4px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 22px;
+    text-align: center;
+  }
+  .booking-column-config-btn:hover {
+    border-color: #2c3e50;
+  }
+  .booking-column-config-floating {
+    position: absolute;
+    top: 11px;
+    right: 12px;
+    z-index: 100;
+  }
+  .booking-actions-cover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 60;
+    width: 168px;
+    height: 44px;
+    background: #f8f9fa;
+    border-left: 1px solid #e5e9ef;
+    pointer-events: none;
+  }
+  .booking-column-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.22);
+  }
+  .booking-column-modal-backdrop.show {
+    display: flex;
+  }
+  .booking-column-modal {
+    width: min(760px, 94vw);
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #d8e0ea;
+    border-radius: 6px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  }
+  .booking-column-modal-header,
+  .booking-column-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #edf1f5;
+  }
+  .booking-column-modal-footer {
+    border-top: 1px solid #edf1f5;
+    border-bottom: 0;
+  }
+  .booking-column-groups {
+    overflow: auto;
+    padding: 14px 16px;
+  }
+  .booking-column-group + .booking-column-group {
+    margin-top: 16px;
+  }
+  .booking-column-group-title {
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-weight: 600;
+  }
+  .booking-column-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px 18px;
+  }
+  .booking-column-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #334155;
+    font-size: 13px;
+  }
+  .booking-column-option input {
+    width: 15px;
+    height: 15px;
+    accent-color: #2c3e50;
+  }
 </style>
 {% endblock %}
 
@@ -99,27 +251,32 @@
 
 {% if any_filter %}
 {# 筛选模式：单表混合（无分页） #}
-<div class="card mb-3 sku-result-card list-freeze-card">
+<div class="card mb-3 sku-result-card list-freeze-card booking-table-panel">
+  <div class="booking-actions-cover"></div>
+  <button type="button" class="booking-column-config-btn booking-column-config-floating" data-column-config title="列配置" aria-label="列配置" onclick="var m=document.getElementById('bookingColumnModal'); if(m){m.classList.add('show');m.setAttribute('aria-hidden','false');}">⚙</button>
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>筛选条件：{{ filter_summary or '无' }} · 命中 {{ unified_search_results|length }} 条</span>
   </div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+  <div class="table-responsive booking-table-scroll">
+    <table class="table table-hover mb-0 booking-table">
       <thead>
         <tr>
           <th style="width:32px;"><input type="checkbox" class="bkg-select-all"></th>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>客户名</th>
-          <th>船名/航次</th>
-          <th>提单号</th>
-          <th>船公司</th>
-          <th>ETD</th>
-          <th>ETA</th>
-          <th>目的地</th>
-          <th>订舱状态</th>
-          <th class="actions">操作</th>
+          <th data-col="record_state">状态</th>
+          <th data-col="order_no">订单号</th>
+          <th data-col="supplier">供应商</th>
+          <th data-col="custom_name">客户名</th>
+          <th data-col="vessel_voyage">船名/航次</th>
+          <th data-col="bl_no">提单号</th>
+          <th data-col="shipping_company">船公司</th>
+          <th data-col="etd">ETD</th>
+          <th data-col="eta">ETA</th>
+          <th data-col="destination">目的地</th>
+          <th data-col="cutoff_time">截单时间</th>
+          <th data-col="booking_status">订舱状态</th>
+          <th data-col="remarks">备注</th>
+          <th class="booking-actions-spacer" aria-hidden="true"></th>
+          <th class="actions"></th>
         </tr>
       </thead>
       <tbody>
@@ -129,19 +286,22 @@
           {% set o = r.order %}
           <tr class="row-pending" data-type="order">
             <td><input type="checkbox" class="bkg-checkbox" data-type="order" data-id="{{ o.id }}"></td>
-            <td><span class="badge bg-light text-secondary border">待订舱</span></td>
-            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-            <td>{{ o.supplier_name }}</td>
-            <td>{{ o.custom_name or '-' }}</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td data-col="record_state"><span class="badge bg-light text-secondary border">待订舱</span></td>
+            <td data-col="order_no"><a href="{{ url_for('booking.new_booking', order_id=o.id, view=1) }}">{{ o.order_no }}</a></td>
+            <td data-col="supplier">{{ o.supplier_name }}</td>
+            <td data-col="custom_name">{{ o.custom_name or '-' }}</td>
+            <td data-col="vessel_voyage" class="text-muted">-</td>
+            <td data-col="bl_no" class="text-muted">-</td>
+            <td data-col="shipping_company" class="text-muted">-</td>
+            <td data-col="etd" class="text-muted">-</td>
+            <td data-col="eta" class="text-muted">-</td>
+            <td data-col="destination" class="text-muted">-</td>
+            <td data-col="cutoff_time" class="text-muted">-</td>
+            <td data-col="booking_status"><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td data-col="remarks" class="text-muted">-</td>
+            <td class="booking-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
-              <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('booking.new_booking', order_id=o.id, view=1) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('booking.new_booking', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">填订舱</a>
             </td>
           </tr>
@@ -149,19 +309,22 @@
           {% set br = r.booking %}
           <tr data-type="booking">
             <td><input type="checkbox" class="bkg-checkbox" data-type="booking" data-id="{{ br.id }}"></td>
-            <td><span class="badge bg-light text-dark border">已订舱</span></td>
-            <td>{% if br.order %}<a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
-            <td>{{ br.order.supplier_name if br.order else '-' }}</td>
-            <td>{{ br.custom_name or '-' }}</td>
-            <td>{{ br.vessel_voyage or '-' }}</td>
-            <td>{{ br.bl_no or '-' }}</td>
-            <td>{{ br.shipping_company or '-' }}</td>
-            <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
-            <td>{{ br.eta or '-' }}</td>
-            <td>{{ br.destination or '-' }}</td>
-            <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td data-col="record_state"><span class="badge bg-light text-dark border">已订舱</span></td>
+            <td data-col="order_no">{% if br.order %}<a href="{{ url_for('booking.booking_detail', id=br.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td data-col="supplier">{{ br.order.supplier_name if br.order else '-' }}</td>
+            <td data-col="custom_name">{{ br.custom_name or '-' }}</td>
+            <td data-col="vessel_voyage">{{ br.vessel_voyage or '-' }}</td>
+            <td data-col="bl_no">{{ br.bl_no or '-' }}</td>
+            <td data-col="shipping_company">{{ br.shipping_company or '-' }}</td>
+            <td data-col="etd">{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+            <td data-col="eta">{{ br.eta or '-' }}</td>
+            <td data-col="destination">{{ br.destination or '-' }}</td>
+            <td data-col="cutoff_time">{{ br.cutoff_time or '-' }}</td>
+            <td data-col="booking_status"><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td data-col="remarks">{{ br.remarks or '-' }}</td>
+            <td class="booking-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
-              <a href="{{ url_for('booking.eta_history', id=br.id) }}" class="btn btn-sm btn-outline-secondary">ETA历史</a>
+              <a href="{{ url_for('booking.booking_detail', id=br.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
               <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此订舱记录吗？');">
                 <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
@@ -171,7 +334,7 @@
           {% endif %}
           {% endfor %}
         {% else %}
-        <tr><td colspan="13">
+        <tr><td colspan="16">
           <div class="text-center text-muted py-4">没有记录匹配当前筛选条件</div>
         </td></tr>
         {% endif %}
@@ -182,24 +345,29 @@
 
 {% else %}
 {# 默认视图：单表混合（未订舱 + 已订舱分页） #}
-<div class="card list-freeze-card">
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+<div class="card list-freeze-card booking-table-panel">
+  <div class="booking-actions-cover"></div>
+  <button type="button" class="booking-column-config-btn booking-column-config-floating" data-column-config title="列配置" aria-label="列配置" onclick="var m=document.getElementById('bookingColumnModal'); if(m){m.classList.add('show');m.setAttribute('aria-hidden','false');}">⚙</button>
+  <div class="table-responsive booking-table-scroll">
+    <table class="table table-hover mb-0 booking-table">
       <thead>
         <tr>
           <th style="width:32px;"><input type="checkbox" class="bkg-select-all"></th>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>客户名</th>
-          <th>船名/航次</th>
-          <th>提单号</th>
-          <th>船公司</th>
-          <th>ETD</th>
-          <th>ETA</th>
-          <th>目的地</th>
-          <th>订舱状态</th>
-          <th class="actions">操作</th>
+          <th data-col="record_state">状态</th>
+          <th data-col="order_no">订单号</th>
+          <th data-col="supplier">供应商</th>
+          <th data-col="custom_name">客户名</th>
+          <th data-col="vessel_voyage">船名/航次</th>
+          <th data-col="bl_no">提单号</th>
+          <th data-col="shipping_company">船公司</th>
+          <th data-col="etd">ETD</th>
+          <th data-col="eta">ETA</th>
+          <th data-col="destination">目的地</th>
+          <th data-col="cutoff_time">截单时间</th>
+          <th data-col="booking_status">订舱状态</th>
+          <th data-col="remarks">备注</th>
+          <th class="booking-actions-spacer" aria-hidden="true"></th>
+          <th class="actions"></th>
         </tr>
       </thead>
       <tbody>
@@ -209,19 +377,22 @@
           {% set o = r.order %}
           <tr class="row-pending" data-type="order">
             <td><input type="checkbox" class="bkg-checkbox" data-type="order" data-id="{{ o.id }}"></td>
-            <td><span class="badge bg-light text-secondary border">待订舱</span></td>
-            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-            <td>{{ o.supplier_name }}</td>
-            <td>{{ o.custom_name or '-' }}</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td class="text-muted">-</td>
-            <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td data-col="record_state"><span class="badge bg-light text-secondary border">待订舱</span></td>
+            <td data-col="order_no"><a href="{{ url_for('booking.new_booking', order_id=o.id, view=1) }}">{{ o.order_no }}</a></td>
+            <td data-col="supplier">{{ o.supplier_name }}</td>
+            <td data-col="custom_name">{{ o.custom_name or '-' }}</td>
+            <td data-col="vessel_voyage" class="text-muted">-</td>
+            <td data-col="bl_no" class="text-muted">-</td>
+            <td data-col="shipping_company" class="text-muted">-</td>
+            <td data-col="etd" class="text-muted">-</td>
+            <td data-col="eta" class="text-muted">-</td>
+            <td data-col="destination" class="text-muted">-</td>
+            <td data-col="cutoff_time" class="text-muted">-</td>
+            <td data-col="booking_status"><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td data-col="remarks" class="text-muted">-</td>
+            <td class="booking-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
-              <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+              <a href="{{ url_for('booking.new_booking', order_id=o.id, view=1) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('booking.new_booking', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">填订舱</a>
             </td>
           </tr>
@@ -229,19 +400,22 @@
           {% set br = r.booking %}
           <tr data-type="booking">
             <td><input type="checkbox" class="bkg-checkbox" data-type="booking" data-id="{{ br.id }}"></td>
-            <td><span class="badge bg-light text-dark border">已订舱</span></td>
-            <td>{% if br.order %}<a href="{{ url_for('orders.order_detail', id=br.order.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
-            <td>{{ br.order.supplier_name if br.order else '-' }}</td>
-            <td>{{ br.custom_name or '-' }}</td>
-            <td>{{ br.vessel_voyage or '-' }}</td>
-            <td>{{ br.bl_no or '-' }}</td>
-            <td>{{ br.shipping_company or '-' }}</td>
-            <td>{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
-            <td>{{ br.eta or '-' }}</td>
-            <td>{{ br.destination or '-' }}</td>
-            <td><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td data-col="record_state"><span class="badge bg-light text-dark border">已订舱</span></td>
+            <td data-col="order_no">{% if br.order %}<a href="{{ url_for('booking.booking_detail', id=br.id) }}">{{ br.order.order_no }}</a>{% else %}-{% endif %}</td>
+            <td data-col="supplier">{{ br.order.supplier_name if br.order else '-' }}</td>
+            <td data-col="custom_name">{{ br.custom_name or '-' }}</td>
+            <td data-col="vessel_voyage">{{ br.vessel_voyage or '-' }}</td>
+            <td data-col="bl_no">{{ br.bl_no or '-' }}</td>
+            <td data-col="shipping_company">{{ br.shipping_company or '-' }}</td>
+            <td data-col="etd">{{ br.etd.strftime('%Y-%m-%d') if br.etd else '-' }}</td>
+            <td data-col="eta">{{ br.eta or '-' }}</td>
+            <td data-col="destination">{{ br.destination or '-' }}</td>
+            <td data-col="cutoff_time">{{ br.cutoff_time or '-' }}</td>
+            <td data-col="booking_status"><span class="badge badge-status status-{{ br.status }}">{{ br.status }}</span></td>
+            <td data-col="remarks">{{ br.remarks or '-' }}</td>
+            <td class="booking-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
-              <a href="{{ url_for('booking.eta_history', id=br.id) }}" class="btn btn-sm btn-outline-secondary">ETA历史</a>
+              <a href="{{ url_for('booking.booking_detail', id=br.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('booking.edit_booking', id=br.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
               <form method="POST" action="{{ url_for('booking.delete_booking', id=br.id) }}" style="display:inline;" onsubmit="return confirm('确定要删除此订舱记录吗？');">
                 <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
@@ -251,7 +425,7 @@
           {% endif %}
           {% endfor %}
         {% else %}
-        <tr><td colspan="13">
+        <tr><td colspan="16">
           <div class="text-center text-muted py-5">
             <p>暂无订舱记录</p>
             <a href="{{ url_for('booking.new_booking') }}" class="btn btn-secondary">创建第一条订舱记录</a>
@@ -308,6 +482,23 @@
 </div>
 {% endif %}
 
+</div>
+
+<div class="booking-column-modal-backdrop" id="bookingColumnModal" aria-hidden="true">
+  <div class="booking-column-modal" role="dialog" aria-modal="true" aria-labelledby="bookingColumnModalTitle">
+    <div class="booking-column-modal-header">
+      <h5 class="mb-0" id="bookingColumnModalTitle">列配置</h5>
+      <button type="button" class="btn-close" aria-label="关闭" data-column-cancel></button>
+    </div>
+    <div class="booking-column-groups" id="bookingColumnGroups"></div>
+    <div class="booking-column-modal-footer">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="bookingColumnReset">恢复默认</button>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-column-cancel>取消</button>
+        <button type="button" class="btn btn-sm btn-secondary" id="bookingColumnSave">保存</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 {% endblock %}
@@ -368,6 +559,157 @@ function exportSelectedBookings() {
   if (bookingIds.length) url += "booking_ids=" + bookingIds.join(",");
   window.location.href = url;
 }
+
+var BOOKING_COLUMN_STORAGE_KEY = "booking.visibleColumns";
+var BOOKING_COLUMN_GROUPS = [
+  {
+    title: "基础信息",
+    columns: [
+      { key: "record_state", label: "状态", defaultVisible: true },
+      { key: "order_no", label: "订单号", defaultVisible: true },
+      { key: "supplier", label: "供应商", defaultVisible: true },
+      { key: "custom_name", label: "客户名", defaultVisible: true }
+    ]
+  },
+  {
+    title: "船务信息",
+    columns: [
+      { key: "vessel_voyage", label: "船名/航次", defaultVisible: true },
+      { key: "bl_no", label: "提单号", defaultVisible: true },
+      { key: "shipping_company", label: "船公司", defaultVisible: true },
+      { key: "destination", label: "目的地", defaultVisible: true },
+      { key: "booking_status", label: "订舱状态", defaultVisible: true }
+    ]
+  },
+  {
+    title: "时间与备注",
+    columns: [
+      { key: "etd", label: "ETD", defaultVisible: true },
+      { key: "eta", label: "ETA", defaultVisible: true },
+      { key: "cutoff_time", label: "截单时间", defaultVisible: false },
+      { key: "remarks", label: "备注", defaultVisible: false }
+    ]
+  }
+];
+
+function getAllBookingColumns() {
+  return BOOKING_COLUMN_GROUPS.reduce(function(cols, group) {
+    return cols.concat(group.columns);
+  }, []);
+}
+
+function getDefaultBookingVisibleColumns() {
+  return getAllBookingColumns()
+    .filter(function(col) { return col.defaultVisible; })
+    .map(function(col) { return col.key; });
+}
+
+function loadBookingVisibleColumns() {
+  var allKeys = getAllBookingColumns().map(function(col) { return col.key; });
+  try {
+    var raw = localStorage.getItem(BOOKING_COLUMN_STORAGE_KEY);
+    if (!raw) return getDefaultBookingVisibleColumns();
+    var stored = JSON.parse(raw);
+    if (!Array.isArray(stored)) return getDefaultBookingVisibleColumns();
+    return stored.filter(function(key) { return allKeys.indexOf(key) !== -1; });
+  } catch (err) {
+    return getDefaultBookingVisibleColumns();
+  }
+}
+
+function saveBookingVisibleColumns(columns) {
+  localStorage.setItem(BOOKING_COLUMN_STORAGE_KEY, JSON.stringify(columns));
+}
+
+function applyBookingVisibleColumns(columns) {
+  var visible = new Set(columns);
+  document.querySelectorAll("[data-col]").forEach(function(cell) {
+    cell.style.display = visible.has(cell.getAttribute("data-col")) ? "" : "none";
+  });
+}
+
+function openBookingColumnModal() {
+  var modal = document.getElementById("bookingColumnModal");
+  if (!modal) return;
+  var visible = new Set(loadBookingVisibleColumns());
+  document.querySelectorAll(".booking-column-checkbox").forEach(function(input) {
+    input.checked = visible.has(input.value);
+  });
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeBookingColumnModal() {
+  var modal = document.getElementById("bookingColumnModal");
+  if (!modal) return;
+  modal.classList.remove("show");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+window.openBookingColumnModal = openBookingColumnModal;
+window.closeBookingColumnModal = closeBookingColumnModal;
+
+function renderBookingColumnOptions() {
+  var container = document.getElementById("bookingColumnGroups");
+  if (!container) return;
+  var visible = new Set(loadBookingVisibleColumns());
+  container.innerHTML = BOOKING_COLUMN_GROUPS.map(function(group) {
+    var options = group.columns.map(function(col) {
+      var checked = visible.has(col.key) ? "checked" : "";
+      return '<label class="booking-column-option">' +
+        '<input type="checkbox" class="booking-column-checkbox" value="' + col.key + '" ' + checked + '>' +
+        '<span>' + col.label + '</span>' +
+      '</label>';
+    }).join("");
+    return '<div class="booking-column-group">' +
+      '<div class="booking-column-group-title">' + group.title + '</div>' +
+      '<div class="booking-column-options">' + options + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function initBookingColumns() {
+  renderBookingColumnOptions();
+  applyBookingVisibleColumns(loadBookingVisibleColumns());
+  document.querySelectorAll("[data-column-config]").forEach(function(btn) {
+    btn.addEventListener("click", openBookingColumnModal);
+    btn.addEventListener("keydown", function(e) {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openBookingColumnModal();
+      }
+    });
+  });
+  document.querySelectorAll("[data-column-cancel]").forEach(function(btn) {
+    btn.addEventListener("click", closeBookingColumnModal);
+  });
+  var modal = document.getElementById("bookingColumnModal");
+  if (modal) {
+    modal.addEventListener("click", function(e) {
+      if (e.target === modal) closeBookingColumnModal();
+    });
+  }
+  var saveBtn = document.getElementById("bookingColumnSave");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", function() {
+      var selected = Array.from(document.querySelectorAll(".booking-column-checkbox:checked"))
+        .map(function(input) { return input.value; });
+      saveBookingVisibleColumns(selected);
+      applyBookingVisibleColumns(selected);
+      closeBookingColumnModal();
+    });
+  }
+  var resetBtn = document.getElementById("bookingColumnReset");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function() {
+      var defaults = getDefaultBookingVisibleColumns();
+      saveBookingVisibleColumns(defaults);
+      renderBookingColumnOptions();
+      applyBookingVisibleColumns(defaults);
+    });
+  }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
   var chkAll = document.querySelector(".bkg-select-all");
   if (chkAll) {
@@ -381,6 +723,7 @@ document.addEventListener("DOMContentLoaded", function() {
     cb.addEventListener("change", updateBookingBar);
   });
   updateBookingBar();
+  initBookingColumns();
 });
 </script>
 {% endblock %}

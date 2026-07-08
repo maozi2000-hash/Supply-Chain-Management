@@ -26,6 +26,28 @@ def _safe_filename(value):
     return re.sub(r'[\\/:*?"<>|]+', "_", value or "N_A")
 
 
+def _fees_dict(cr):
+    """把装柜记录的 5 项费用 + 备注打包成 dict 给前端"""
+    return {
+        "domestic_transport_fee": float(cr.domestic_transport_fee or 0),
+        "ocean_freight_fee":       float(cr.ocean_freight_fee or 0),
+        "overseas_truck_fee":      float(cr.overseas_truck_fee or 0),
+        "shelving_fee":            float(cr.shelving_fee or 0),
+        "other_fee":               float(cr.other_fee or 0),
+        "fee_remark":              cr.fee_remark or "",
+    }
+
+
+def _to_fee_float(v):
+    """把 Excel 单元格内容转 float，空值视为 0"""
+    if v is None or v == "":
+        return 0.0
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _default_origin_place(order):
     if order and (order.supplier_name or "").strip() == "优瑞奇":
         return "宁波"
@@ -92,27 +114,33 @@ def _extract_zip_images(container_record, zip_file):
 
 
 def _save_items(container, customs_json, actual_json):
-    CustomsItem.query.filter_by(container_record_id=container.id).delete()
-    try:
-        customs_data = _json.loads(customs_json)
-    except (_json.JSONDecodeError, TypeError):
-        customs_data = []
-    for d in customs_data:
-        sku = d.get("sku", "").strip()
-        qty = d.get("quantity", 0)
-        if sku:
-            db.session.add(CustomsItem(container_record_id=container.id, sku=sku, quantity=qty))
+    # 保护：customs_json/actual_json 不传时（None 或空字符串），保留现有数据不删
+    # 仅当明确传了非空 JSON 时才覆盖（避免前端 JS 渲染失败时把数据清空）
+    if customs_json is not None and customs_json != "":
+        try:
+            customs_data = _json.loads(customs_json)
+            if isinstance(customs_data, list):
+                CustomsItem.query.filter_by(container_record_id=container.id).delete()
+                for d in customs_data:
+                    sku = d.get("sku", "").strip()
+                    qty = d.get("quantity", 0)
+                    if sku:
+                        db.session.add(CustomsItem(container_record_id=container.id, sku=sku, quantity=qty))
+        except (_json.JSONDecodeError, TypeError):
+            pass
 
-    ActualItem.query.filter_by(container_record_id=container.id).delete()
-    try:
-        actual_data = _json.loads(actual_json)
-    except (_json.JSONDecodeError, TypeError):
-        actual_data = []
-    for d in actual_data:
-        sku = d.get("sku", "").strip()
-        qty = d.get("quantity", 0)
-        if sku:
-            db.session.add(ActualItem(container_record_id=container.id, sku=sku, quantity=qty))
+    if actual_json is not None and actual_json != "":
+        try:
+            actual_data = _json.loads(actual_json)
+            if isinstance(actual_data, list):
+                ActualItem.query.filter_by(container_record_id=container.id).delete()
+                for d in actual_data:
+                    sku = d.get("sku", "").strip()
+                    qty = d.get("quantity", 0)
+                    if sku:
+                        db.session.add(ActualItem(container_record_id=container.id, sku=sku, quantity=qty))
+        except (_json.JSONDecodeError, TypeError):
+            pass
 
 
 # ============================================================
@@ -226,6 +254,7 @@ def list_container():
                 "order": cr.order,
                 "matched_count": len(items),
                 "matched_items": items,
+                "fees": _fees_dict(cr),
             })
 
         # ============ 未装柜（Order）查询 ============
@@ -290,7 +319,7 @@ def list_container():
         for o in pending_orders:
             unified_records.append({"kind": "order", "id": o.id, "order": o, "container": None, "matched_count": 0, "matched_items": []})
         for cr in container_records:
-            unified_records.append({"kind": "container", "id": cr.id, "order": cr.order, "container": cr, "matched_count": 0, "matched_items": []})
+            unified_records.append({"kind": "container", "id": cr.id, "order": cr.order, "container": cr, "matched_count": 0, "matched_items": [], "fees": _fees_dict(cr)})
 
     return render_template(
         "container/list.html", active_menu="container",
@@ -315,6 +344,7 @@ def list_container():
 @container_bp.route("/new", methods=["GET", "POST"])
 @login_required
 def new_container():
+    view_only = request.args.get("view") == "1"
     container_id = request.args.get("id", type=int)
     orders = Order.query.order_by(Order.created_at.desc()).all()
     bookings = BookingRecord.query.order_by(db.desc(BookingRecord.id)).all()
@@ -372,6 +402,7 @@ def new_container():
                 "container/form.html", active_menu="container", container=container,
                 orders=orders, bookings=bookings, selected_order_id=selected_order_id,
                                         synced_items=synced_items,
+                view_only=view_only,
             )
 
         is_new = container is None
@@ -391,8 +422,9 @@ def new_container():
             if err:
                 flash(err, "warning")
 
-        customs_json = request.form.get("customs_json", "[]")
-        actual_json = request.form.get("actual_json", "[]")
+        customs_json = request.form.get("customs_json")
+        actual_json = request.form.get("actual_json")
+        # None 时后端不修改现有 items（保护已有数据）
         _save_items(container_obj, customs_json, actual_json)
 
         order = db.session.get(Order, container_obj.order_id)
@@ -408,6 +440,20 @@ def new_container():
 
     # GET 请求
     synced_items = None
+
+    # 编辑模式：如果 customs/actual 为空但订单有 items，自动从订单同步（恢复数据）
+    if container and (not container.customs_items or not container.actual_items) and container.order and container.order.items:
+        from sqlalchemy.orm import joinedload
+        order = container.order
+        # 用 joinedload 避免 lazy load 失效
+        for oi in order.items:
+            if not container.customs_items:
+                db.session.add(CustomsItem(container_record_id=container.id, sku=oi.sku, quantity=oi.quantity))
+            if not container.actual_items:
+                db.session.add(ActualItem(container_record_id=container.id, sku=oi.sku, quantity=oi.quantity))
+        db.session.commit()
+        flash("已自动从订单「" + (order.order_no or "") + "」的明细同步到装柜记录", "info")
+
     if container:
         customs_data = [{"sku": ci.sku, "quantity": ci.quantity} for ci in container.customs_items]
         actual_data = [{"sku": ai.sku, "quantity": ai.quantity} for ai in container.actual_items]
@@ -422,6 +468,8 @@ def new_container():
         orders=orders, bookings=bookings, selected_order_id=selected_order_id,
         sku_volume_map=sku_volume_map, sku_weight_map=sku_weight_map, sku_cost_map=sku_cost_map,
         synced_items=synced_items,
+        target_order=target_order,
+        view_only=view_only,
     )
 
 
@@ -1019,3 +1067,170 @@ def batch_export():
         as_attachment=True,
         download_name=f"装柜批量导出_{ts}.zip",
     )
+
+
+# ============================================================
+# 实际费用管理（人民币）
+# ============================================================
+FEE_FIELDS = [
+    ("domestic_transport_fee", "国内运输费用"),
+    ("ocean_freight_fee",       "海运费"),
+    ("overseas_truck_fee",      "国外拖车费"),
+    ("shelving_fee",            "上架费"),
+    ("other_fee",               "其他费用"),
+]
+
+
+@container_bp.route("/<int:id>/save-fees", methods=["POST"])
+@login_required
+def save_fees(id):
+    cr = db.session.get(ContainerRecord, id)
+    if not cr:
+        return jsonify({"success": False, "error": "装柜记录不存在"}), 404
+
+    cr.domestic_transport_fee = _to_fee_float(request.form.get("domestic_transport_fee"))
+    cr.ocean_freight_fee       = _to_fee_float(request.form.get("ocean_freight_fee"))
+    cr.overseas_truck_fee      = _to_fee_float(request.form.get("overseas_truck_fee"))
+    cr.shelving_fee            = _to_fee_float(request.form.get("shelving_fee"))
+    cr.other_fee               = _to_fee_float(request.form.get("other_fee"))
+    cr.fee_remark              = (request.form.get("fee_remark") or "").strip()
+
+    db.session.commit()
+    total = (cr.domestic_transport_fee + cr.ocean_freight_fee +
+             cr.overseas_truck_fee + cr.shelving_fee + cr.other_fee)
+    return jsonify({"success": True, "total": round(total, 2)})
+
+
+@container_bp.route("/template-fees", methods=["GET"])
+@login_required
+def template_fees():
+    """下载实际费用 Excel 模板"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "装柜费用"
+    headers = ["柜号", "提单号"] + [name for _, name in FEE_FIELDS]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = Font(bold=True, size=11, color="FFFFFF")
+        c.fill = PatternFill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+        c.alignment = Alignment(horizontal="center")
+    # 示例行
+    sample = ["CAAU1234567", "EGLV143660137161", 1000, 5000, 2000, 500, 300]
+    for col, v in enumerate(sample, 1):
+        ws.cell(row=2, column=col, value=v)
+
+    # 列宽
+    for col_letter in ["A", "B"]:
+        ws.column_dimensions[col_letter].width = 22
+    for col_letter in ["C", "D", "E", "F", "G"]:
+        ws.column_dimensions[col_letter].width = 14
+
+    # 说明 sheet
+    note = wb.create_sheet("使用说明")
+    note["A1"] = "装柜费用导入说明"
+    note["A1"].font = Font(bold=True, size=13)
+    note["A3"] = "1. 必填一列：柜号 或 提单号 至少填一个"
+    note["A4"] = "2. 匹配规则：优先按柜号匹配 → 未匹配则按提单号关联订舱匹配"
+    note["A5"] = "3. 5 项费用单位均为人民币（元），留空视为 0（覆盖式）"
+    note["A6"] = "4. 提单号填写时：系统会通过 BookingRecord.bl_no 找到对应订舱，再关联装柜记录"
+    for r in range(1, 7):
+        note.cell(row=r, column=1).alignment = Alignment(wrap_text=True)
+    note.column_dimensions["A"].width = 70
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name="装柜费用导入模板.xlsx",
+    )
+
+
+@container_bp.route("/import-fees", methods=["POST"])
+@login_required
+def import_fees():
+    """Excel 批量导入实际费用，按柜号或提单号匹配
+    当携带 container_ids 时（前端勾选行导入），只对选中的 id 生效
+    """
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"success": False, "error": "请选择 .xlsx 文件"}), 400
+    if not file.filename.lower().endswith((".xlsx", ".xls")):
+        return jsonify({"success": False, "error": "只支持 .xlsx / .xls 文件"}), 400
+
+    # 解析可选的 container_ids 限制
+    selected_ids_raw = (request.form.get("container_ids") or "").strip()
+    selected_ids = set()
+    selected_only = False
+    if selected_ids_raw:
+        selected_only = True
+        for x in selected_ids_raw.split(","):
+            x = x.strip()
+            if x.isdigit():
+                selected_ids.add(int(x))
+
+    try:
+        wb = load_workbook(file, read_only=True, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        return jsonify({"success": False, "error": f"无法读取 Excel：{e}"}), 400
+
+    success_count = 0
+    fail_rows = []
+    for excel_row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        # 跳过空行
+        if not row or all((c is None or str(c).strip() == "") for c in row):
+            continue
+        container_no = (str(row[0]).strip() if row and len(row) > 0 and row[0] is not None else "")
+        bl_no        = (str(row[1]).strip() if row and len(row) > 1 and row[1] is not None else "")
+
+        if not container_no and not bl_no:
+            fail_rows.append({"row": excel_row_idx, "reason": "柜号和提单号都为空"})
+            continue
+
+        # 匹配：先柜号，后提单号（提单号通过 BookingRecord 关联）
+        cr = None
+        match_by = ""
+        if container_no:
+            cr = ContainerRecord.query.filter_by(container_no=container_no).first()
+            if cr:
+                match_by = "柜号"
+        if not cr and bl_no:
+            booking = BookingRecord.query.filter_by(bl_no=bl_no).first()
+            if booking and booking.container_records:
+                cr = booking.container_records[0]
+                match_by = "提单号"
+        if not cr:
+            fail_rows.append({
+                "row": excel_row_idx,
+                "reason": f"未找到装柜记录（柜号={container_no or '-'}, 提单号={bl_no or '-'}）"
+            })
+            continue
+
+        # 勾选模式下，限制只对选中的 id 生效
+        if selected_only and cr.id not in selected_ids:
+            fail_rows.append({
+                "row": excel_row_idx,
+                "reason": f"未在勾选列表中（柜号 {cr.container_no}）"
+            })
+            continue
+
+        # 写入 5 项费用（覆盖式，空值视为 0）
+        cr.domestic_transport_fee = _to_fee_float(row[2] if len(row) > 2 else None)
+        cr.ocean_freight_fee       = _to_fee_float(row[3] if len(row) > 3 else None)
+        cr.overseas_truck_fee      = _to_fee_float(row[4] if len(row) > 4 else None)
+        cr.shelving_fee            = _to_fee_float(row[5] if len(row) > 5 else None)
+        cr.other_fee               = _to_fee_float(row[6] if len(row) > 6 else None)
+        success_count += 1
+
+    if success_count > 0:
+        db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "success_count": success_count,
+        "fail_count": len(fail_rows),
+        "fail_rows": fail_rows[:50],  # 最多返回 50 条失败明细
+    })

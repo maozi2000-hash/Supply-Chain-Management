@@ -1,7 +1,7 @@
-{# 订舱新增/编辑表单 — 粘贴识别 + 拖拽模块排序 #}
+﻿{# 订舱新增/编辑表单 — 粘贴识别 + 拖拽模块排序 #}
 {% extends "base.html" %}
-{% block title %}{% if booking %}编辑订舱记录{% else %}创建订舱记录{% endif %} — 供应商管理系统{% endblock %}
-{% block page_title %}{% if booking %}编辑订舱记录{% else %}创建订舱记录{% endif %}{% endblock %}
+{% block title %}{% if view_only %}订舱详情{% elif booking %}编辑订舱记录{% else %}创建订舱记录{% endif %} — 供应商管理系统{% endblock %}
+{% block page_title %}{% if view_only %}订舱详情{% elif booking %}编辑订舱记录{% else %}创建订舱记录{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -33,6 +33,31 @@
 
 /* 拖拽时 body 不可选中 */
 body.dragging * { user-select: none !important; }
+.view-only-field {
+  background: #f6f8fa !important;
+  color: var(--text-main) !important;
+}
+.eta-control-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.eta-control-row .eta-main-input {
+  flex: 1 1 auto;
+}
+.eta-date-picker {
+  width: 42px;
+  flex: 0 0 42px;
+  padding: 0 8px;
+}
+.eta-month-select {
+  width: 88px;
+  flex: 0 0 88px;
+}
+.eta-period-select {
+  width: 112px;
+  flex: 0 0 112px;
+}
 </style>
 {% endblock %}
 
@@ -46,7 +71,7 @@ body.dragging * { user-select: none !important; }
       <div class="alert alert-info mb-3" role="alert" style="display:flex;align-items:center;justify-content:space-between;">
         <div>
           <strong>当前订单：</strong>
-          <a href="{{ url_for('orders.order_detail', id=target_order.id) }}" target="_blank" class="alert-link">{{ target_order.order_no }}</a>
+          <a href="{{ url_for('orders.order_detail', id=target_order.id, source='booking') }}" target="_blank" class="alert-link">{{ target_order.order_no }}</a>
           {% if target_order.supplier_name %} · <span class="text-muted">{{ target_order.supplier_name }}</span>{% endif %}
           {% if target_order.custom_name %} · <span class="text-muted">{{ target_order.custom_name }}</span>{% endif %}
           <span class="badge badge-status status-{{ target_order.status }}">{{ target_order.status }}</span>
@@ -62,6 +87,7 @@ body.dragging * { user-select: none !important; }
       </div>
 {% endif %}
 
+    {% if not view_only %}
     <!-- ===== 粘贴识别区 ===== -->
     <div class="paste-area">
       <label class="form-label">粘贴船代订舱信息</label>
@@ -72,6 +98,7 @@ body.dragging * { user-select: none !important; }
       </button>
       <div class="parse-result" id="parseResult"></div>
     </div>
+    {% endif %}
 
     <!-- ===== 可拖拽模块表单 ===== -->
     <form method="POST"
@@ -91,15 +118,56 @@ body.dragging * { user-select: none !important; }
       {% endif %}
 
       <div class="mt-4 d-flex gap-2">
+        {% if view_only %}
+        {% if booking %}
+        <a href="{{ url_for('booking.edit_booking', id=booking.id) }}" class="btn btn-primary">编辑</a>
+        {% endif %}
+        <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">返回列表</a>
+        {% else %}
         <button type="submit" class="btn btn-primary">
           {% if booking %}保存修改{% else %}创建订舱{% endif %}
         </button>
         <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">返回列表</a>
+        {% endif %}
       </div>
     </form>
 
   </div>
 </div>
+
+{% if view_only and booking %}
+<div class="card mt-3">
+  <div class="card-header">ETA 历史</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>变更时间</th>
+          <th>原 ETA</th>
+          <th>新 ETA</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if eta_history_rows %}
+          {% for h in eta_history_rows %}
+          <tr>
+            <td class="text-muted">{{ h.changed_at.strftime('%Y-%m-%d %H:%M') if h.changed_at else '' }}</td>
+            <td>{{ h.old_eta or '-' }}</td>
+            <td class="fw-bold">{{ h.new_eta or '-' }}</td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="3">
+              <div class="empty-state py-3"><p class="mb-0">暂无 ETA 变更记录</p></div>
+            </td>
+          </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}
 
@@ -119,6 +187,8 @@ var MODULE_DEFS = [
   { key: "cutoff_time",  label: "截单时间",         type: "text",     required: false, hint: "例如 2026-06-10 12:00" },
   { key: "remarks",      label: "备注",             type: "textarea", required: false, hint: "备注信息" },
 ];
+
+var VIEW_ONLY = {{ 'true' if view_only else 'false' }};
 
 // 订单选项（从后端传入）
 var ORDER_OPTIONS = [
@@ -201,29 +271,33 @@ function renderModules(order) {
   order.forEach(function(def, idx) {
     var card = document.createElement("div");
     card.className = "module-card";
-    card.setAttribute("draggable", "true");
+    card.setAttribute("draggable", VIEW_ONLY ? "false" : "true");
     card.setAttribute("data-key", def.key);
     card.setAttribute("data-idx", idx);
 
     // 拖拽事件
-    card.addEventListener("dragstart", onDragStart);
-    card.addEventListener("dragover", onDragOver);
-    card.addEventListener("dragleave", onDragLeave);
-    card.addEventListener("drop", onDrop);
-    card.addEventListener("dragend", onDragEnd);
+    if (!VIEW_ONLY) {
+      card.addEventListener("dragstart", onDragStart);
+      card.addEventListener("dragover", onDragOver);
+      card.addEventListener("dragleave", onDragLeave);
+      card.addEventListener("drop", onDrop);
+      card.addEventListener("dragend", onDragEnd);
+    }
 
     // 长按触发拖拽（移动端）
     var longPressTimer;
-    card.addEventListener("touchstart", function(e) {
-      longPressTimer = setTimeout(function() {
-        card.setAttribute("draggable", "true");
-        // 手动触发 dragstart 在移动端比较困难，用简单方式：高亮提示
-        card.classList.add("dragging");
-        setTimeout(function() { card.classList.remove("dragging"); }, 600);
-      }, 500);
-    });
-    card.addEventListener("touchend", function() { clearTimeout(longPressTimer); });
-    card.addEventListener("touchmove", function() { clearTimeout(longPressTimer); });
+    if (!VIEW_ONLY) {
+      card.addEventListener("touchstart", function(e) {
+        longPressTimer = setTimeout(function() {
+          card.setAttribute("draggable", "true");
+          // 手动触发 dragstart 在移动端比较困难，用简单方式：高亮提示
+          card.classList.add("dragging");
+          setTimeout(function() { card.classList.remove("dragging"); }, 600);
+        }, 500);
+      });
+      card.addEventListener("touchend", function() { clearTimeout(longPressTimer); });
+      card.addEventListener("touchmove", function() { clearTimeout(longPressTimer); });
+    }
 
     // 拖拽手柄
     var handle = document.createElement("span");
@@ -246,6 +320,9 @@ function renderModules(order) {
       ta.id = "field_" + def.key;
       ta.rows = 3;
       ta.value = val;
+      ta.readOnly = VIEW_ONLY;
+      ta.disabled = VIEW_ONLY;
+      if (VIEW_ONLY) ta.classList.add("view-only-field");
       card.appendChild(ta);
     } else {
       var inp = document.createElement("input");
@@ -255,7 +332,72 @@ function renderModules(order) {
       inp.id = "field_" + def.key;
       inp.placeholder = def.hint;
       inp.value = val;
-      card.appendChild(inp);
+      inp.readOnly = VIEW_ONLY;
+      inp.disabled = VIEW_ONLY;
+      if (VIEW_ONLY) inp.classList.add("view-only-field");
+      if (def.key === "eta" && !VIEW_ONLY) {
+        inp.classList.add("eta-main-input");
+        var etaRow = document.createElement("div");
+        etaRow.className = "eta-control-row";
+        etaRow.appendChild(inp);
+
+        var datePicker = document.createElement("input");
+        datePicker.type = "date";
+        datePicker.className = "form-control eta-date-picker";
+        datePicker.title = "选择 ETA 日期";
+        datePicker.addEventListener("change", function() {
+          if (this.value) inp.value = normalizeEtaValue(this.value);
+        });
+        etaRow.appendChild(datePicker);
+        card.appendChild(etaRow);
+
+        var monthSelect = document.createElement("select");
+        monthSelect.className = "form-select eta-month-select";
+        monthSelect.title = "选择 ETA 月份";
+        appendOption(monthSelect, "", "月份");
+        buildEtaMonthOptions().forEach(function(text) {
+          appendOption(monthSelect, text, text);
+        });
+        etaRow.appendChild(monthSelect);
+
+        var periodSelect = document.createElement("select");
+        periodSelect.className = "form-select eta-period-select";
+        periodSelect.title = "选择 ETA 时间段";
+        appendOption(periodSelect, "", "时间段");
+        ["月初", "上旬", "中旬", "下旬", "月底", "待船司确认", "待定", "船司未确认"].forEach(function(text) {
+          appendOption(periodSelect, text, text);
+        });
+        etaRow.appendChild(periodSelect);
+
+        function applyEtaQuickValue() {
+          var period = periodSelect.value;
+          if (!period) return;
+          if (period.indexOf("待") === 0 || period.indexOf("船司") === 0) {
+            inp.value = period;
+            monthSelect.value = "";
+            return;
+          }
+          if (monthSelect.value) inp.value = monthSelect.value + period;
+        }
+        monthSelect.addEventListener("change", applyEtaQuickValue);
+        periodSelect.addEventListener("change", applyEtaQuickValue);
+
+        var etaNormalizeTimer = null;
+        inp.addEventListener("input", function() {
+          clearTimeout(etaNormalizeTimer);
+          etaNormalizeTimer = setTimeout(function() {
+            inp.value = normalizeEtaValue(inp.value, true);
+          }, 500);
+        });
+        inp.addEventListener("blur", function() {
+          this.value = normalizeEtaValue(this.value);
+        });
+        inp.addEventListener("keydown", function(e) {
+          if (e.key === "Enter") this.value = normalizeEtaValue(this.value);
+        });
+      } else {
+        card.appendChild(inp);
+      }
     }
 
     container.appendChild(card);
@@ -340,6 +482,8 @@ function parseBookingText() {
         if (dm) {
           val = dm[1] + "-" + dm[2].padStart(2, "0") + "-" + dm[3].padStart(2, "0");
         }
+      } else if (key === "eta") {
+        val = normalizeEtaValue(val);
       }
       // 填入对应字段
       var field = document.getElementById("field_" + key);
@@ -357,5 +501,50 @@ function parseBookingText() {
     result.innerHTML = '<span class="text-warning">未识别到任何字段，请检查格式</span>';
   }
 }
+
+function normalizeEtaValue(raw, typingMode) {
+  var value = String(raw || "").trim();
+  if (!value) return "";
+  var now = new Date();
+  var currentYear = now.getFullYear();
+  var match = typingMode
+    ? value.match(/^(\d{4})[.\\/-](\d{1,2})[.\\/-](\d{2})$/)
+    : value.match(/^(\d{4})[.\\/-](\d{1,2})[.\\/-](\d{1,2})$/);
+  if (match) {
+    return parseInt(match[1], 10) + "/" + parseInt(match[2], 10) + "/" + parseInt(match[3], 10);
+  }
+  match = typingMode
+    ? value.match(/^(\d{1,2})[.\\/-](\d{2})$/)
+    : value.match(/^(\d{1,2})[.\\/-](\d{1,2})$/);
+  if (match) {
+    return currentYear + "/" + parseInt(match[1], 10) + "/" + parseInt(match[2], 10);
+  }
+  return value;
+}
+
+function appendOption(select, value, text) {
+  var option = document.createElement("option");
+  option.value = value;
+  option.textContent = text;
+  select.appendChild(option);
+}
+
+function buildEtaMonthOptions() {
+  var now = new Date();
+  var options = [];
+  for (var i = 0; i < 6; i++) {
+    var date = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    var month = date.getMonth() + 1;
+    options.push(month + "月");
+  }
+  return options;
+}
+
+document.addEventListener("submit", function(e) {
+  if (!e.target || e.target.id !== "bookingForm") return;
+  var eta = document.getElementById("field_eta");
+  if (eta) eta.value = normalizeEtaValue(eta.value);
+});
 </script>
 {% endblock %}
+

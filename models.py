@@ -138,6 +138,14 @@ class ContainerRecord(db.Model):
     estimated_freight = db.Column(db.Float, default=0)       # 预估头程总价
     actual_freight = db.Column(db.Float, default=0)          # 实际头程总价
 
+    # 实际费用（人民币）
+    domestic_transport_fee = db.Column(db.Float, default=0)   # 国内运输费用
+    ocean_freight_fee = db.Column(db.Float, default=0)       # 海运费
+    overseas_truck_fee = db.Column(db.Float, default=0)      # 国外拖车费
+    shelving_fee = db.Column(db.Float, default=0)            # 上架费
+    other_fee = db.Column(db.Float, default=0)               # 其他费用
+    fee_remark = db.Column(db.Text)                          # 费用备注（解释"其他费用"）
+
     # 关联
     booking = db.relationship("BookingRecord", backref="container_records")
     images = db.relationship(

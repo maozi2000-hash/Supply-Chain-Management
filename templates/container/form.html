@@ -2,9 +2,9 @@
 
 {% extends "base.html" %}
 
-{% block title %}{% if container %}编辑装柜记录{% else %}新增装柜记录{% endif %}{% endblock %}
+{% block title %}{% if view_only %}装柜详情{% elif container %}编辑装柜记录{% else %}新增装柜记录{% endif %}{% endblock %}
 
-{% block page_title %}{% if container %}编辑装柜记录：{{ container.container_no }}{% else %}新增装柜记录{% endif %}{% endblock %}
+{% block page_title %}{% if view_only %}{% if container %}装柜详情：{{ container.container_no }}{% else %}装柜详情{% endif %}{% elif container %}编辑装柜记录：{{ container.container_no }}{% else %}新增装柜记录{% endif %}{% endblock %}
 
 
 
@@ -103,6 +103,14 @@
 </style></style>
 
 {% endblock %}
+
+{# Jinja2 set 必须在 block 外才能被其他 block 看到 #}
+{% set _fee_dom = (container.domestic_transport_fee or 0) if container is defined and container else 0 %}
+{% set _fee_ocean = (container.ocean_freight_fee or 0) if container is defined and container else 0 %}
+{% set _fee_truck = (container.overseas_truck_fee or 0) if container is defined and container else 0 %}
+{% set _fee_shelv = (container.shelving_fee or 0) if container is defined and container else 0 %}
+{% set _fee_other = (container.other_fee or 0) if container is defined and container else 0 %}
+{% set _fee_total = _fee_dom + _fee_ocean + _fee_truck + _fee_shelv + _fee_other %}
 
 
 
@@ -211,14 +219,30 @@
           <thead><tr><th style="width:28px;" class="col-cb"><input type="checkbox" class="select-all-checkbox" data-type="customs" title="全选"></th><th class="col-sku">SKU</th><th class="col-qty">数量</th><th class="col-cost">产品单价</th><th class="col-freight">
             <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span>头程预估单价</span>
-              <span style="font-weight:400;font-size:11px;color:#5f6368;">总价 $</span>
+              <span style="font-weight:400;font-size:11px;color:#5f6368;">总价 ¥</span>
               <input type="number" class="form-control form-control-sm freight-total-input" step="0.01" min="0"
                      placeholder="0" style="width:80px;height:26px;font-size:11px;"
                      data-type="customs"
                      value="{{ container.estimated_freight if container else '' }}">
             </div>
           </th><th class="col-del" style="width:40px;"></th></tr></thead>
-          <tbody id="customsBody"><tr><td colspan="6" class="text-muted text-center py-2">暂无</td></tr></tbody>
+          <tbody id="customsBody">
+            {% if container and container.customs_items %}
+              {% for ci in container.customs_items %}
+              {% set _ci_cost = sku_cost_map.get(ci.sku, 0) %}
+              <tr data-type="customs" data-sku="{{ ci.sku }}">
+                <td style="width:24px;text-align:center;"><input type="checkbox" class="row-checkbox"></td>
+                <td><div class="autocomplete-wrapper"><input type="text" class="form-control form-control-sm sku-autocomplete" value="{{ ci.sku }}" autocomplete="off" style="border:none;background:transparent;padding:2px 4px;font-size:13px;width:100%;"><div class="autocomplete-list"></div></div></td>
+                <td><input type="number" class="form-control form-control-sm" value="{{ ci.quantity }}" min="0" style="border:none;background:transparent;padding:2px 4px;font-size:13px;width:80px;"></td>
+                <td><span style="font-size:12px;color:#5f6368;">{% if _ci_cost %}¥{{ '%.2f'|format(_ci_cost) }}{% else %}-{% endif %}</span></td>
+                <td><span class="freight-unit" style="font-size:12px;color:#0d904f;font-weight:500;">-</span></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" style="font-size:11px;padding:1px 6px;">×</button></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="6" class="text-muted text-center py-2">暂无</td></tr>
+            {% endif %}
+          </tbody>
           <tfoot id="customsFoot"></tfoot>
         </table>
       </div>
@@ -233,9 +257,14 @@
 
       <div class="card-header d-flex justify-content-between align-items-center">
         装柜数据（真实）
-        <div class="toolbar">
-          <button type="button" class="btn btn-sm btn-outline-warning" onclick="showManualModal('actual')">添加/删除</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onclick="renderItemTable('actual')" title="刷新">刷新</button>
+        <div class="d-flex align-items-center gap-2">
+          <span style="font-size:12px;font-weight:400;color:#c5221f;" id="actualFeeTotalLabel">
+            实际总价 ¥{{ '%.2f'|format(_fee_total) }} <small class="text-muted">(取自费用明细)</small>
+          </span>
+          <div class="toolbar">
+            <button type="button" class="btn btn-sm btn-outline-warning" onclick="showManualModal('actual')">添加/删除</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="renderItemTable('actual')" title="刷新">刷新</button>
+          </div>
         </div>
       </div>
       <div class="delete-selected-bar" id="actualDeleteBar">
@@ -248,25 +277,34 @@
 
           <thead><tr><th style="width:28px;" class="col-cb"><input type="checkbox" class="select-all-checkbox" data-type="actual" title="全选"></th><th class="col-sku">SKU</th><th class="col-qty">数量</th><th class="col-cost">产品单价</th><th class="col-freight">
 
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <span>实际单价</span>
 
-          <span>头程实际单价</span>
+        <small class="text-muted ms-2" style="font-size:11px;">（自动按 5 项费用之和分摊到 CBM）</small>
 
-          <span style="font-weight:400;font-size:11px;color:#5f6368;">总价 $</span>
-
-          <input type="number" class="form-control form-control-sm freight-total-input" step="0.01" min="0"
-
-                 placeholder="0" style="width:80px;height:26px;font-size:11px;"
-
-                 data-type="actual"
-
-                 value="{{ container.actual_freight if container else '' }}">
-
-        </div>
+        {# 隐藏：实际总价取自 5 项费用之和（人民币），不允许编辑 #}
+        <input type="hidden" class="freight-total-input" step="0.01" min="0"
+               data-type="actual"
+               value="{{ _fee_total }}">
 
       </th><th class="col-del" style="width:40px;"></th></tr></thead>
 
-          <tbody id="actualBody"><tr><td colspan="6" class="text-muted text-center py-2">暂无</td></tr></tbody>
+          <tbody id="actualBody">
+            {% if container and container.actual_items %}
+              {% for ai in container.actual_items %}
+              {% set _ai_cost = sku_cost_map.get(ai.sku, 0) %}
+              <tr data-type="actual" data-sku="{{ ai.sku }}">
+                <td style="width:24px;text-align:center;"><input type="checkbox" class="row-checkbox"></td>
+                <td><div class="autocomplete-wrapper"><input type="text" class="form-control form-control-sm sku-autocomplete" value="{{ ai.sku }}" autocomplete="off" style="border:none;background:transparent;padding:2px 4px;font-size:13px;width:100%;"><div class="autocomplete-list"></div></div></td>
+                <td><input type="number" class="form-control form-control-sm" value="{{ ai.quantity }}" min="0" style="border:none;background:transparent;padding:2px 4px;font-size:13px;width:80px;"></td>
+                <td><span style="font-size:12px;color:#5f6368;">{% if _ai_cost %}¥{{ '%.2f'|format(_ai_cost) }}{% else %}-{% endif %}</span></td>
+                <td><span class="freight-unit" style="font-size:12px;color:#0d904f;font-weight:500;">-</span></td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" style="font-size:11px;padding:1px 6px;">×</button></td>
+              </tr>
+              {% endfor %}
+            {% else %}
+              <tr><td colspan="6" class="text-muted text-center py-2">暂无</td></tr>
+            {% endif %}
+          </tbody>
 
           <tfoot id="actualFoot"></tfoot>
 
@@ -330,9 +368,11 @@
 
 
 
-  <input type="hidden" name="customs_json" id="customsJson" value="">
+  <input type="hidden" name="customs_json" id="customsJson"
+         value='{% if container and container.customs_items %}[{% for ci in container.customs_items %}{"sku":"{{ ci.sku|e }}","quantity":{{ ci.quantity }}}{% if not loop.last %},{% endif %}{% endfor %}]{% else %}[]{% endif %}'>
 
-  <input type="hidden" name="actual_json" id="actualJson" value="">
+  <input type="hidden" name="actual_json" id="actualJson"
+         value='{% if container and container.actual_items %}[{% for ai in container.actual_items %}{"sku":"{{ ai.sku|e }}","quantity":{{ ai.quantity }}}{% if not loop.last %},{% endif %}{% endfor %}]{% else %}[]{% endif %}'>
 
   <input type="hidden" name="estimated_freight" id="estimatedFreightHidden" value="{{ container.estimated_freight if container else '' }}">
 
@@ -346,7 +386,13 @@
 
   <div class="d-flex gap-2 mt-3">
 
+    {% if view_only %}
+    {% if container %}
+    <a href="{{ url_for('container.new_container', id=container.id) }}" class="btn btn-primary">编辑</a>
+    {% endif %}
+    {% else %}
     <button type="submit" class="btn btn-primary">{% if container %}保存修改{% else %}创建装柜{% endif %}</button>
+    {% endif %}
 
     <a href="{{ url_for('container.list_container') }}" class="btn btn-outline-secondary">返回列表</a>
 
@@ -363,6 +409,7 @@
 {% block extra_js %}
 
 <script>
+var VIEW_ONLY = {{ 'true' if view_only else 'false' }};
 
 // ============================================================
 
@@ -377,6 +424,8 @@ var _skuVolumeCache = {
 {% endfor %}
 };
 var _freightTotals = {};
+// 真实装柜的"实际总价"取自 5 项费用之和（人民币），不允许编辑
+var _actualFeeTotal = {{ _fee_total }};
 var _skuWeightCache = {
 {% for sku, wt in sku_weight_map.items() %}
   "{{ sku }}": {{ wt }},
@@ -421,23 +470,37 @@ var itemsData = { customs: [], actual: [] };
 
 (function initData() {
 
+  // 优先从模板的 synced_items 变量取数（与后端 Jinja 渲染的 tbody 内容一致）
   {% if synced_items %}
-
     {% if synced_items is mapping %}
-
       itemsData.customs = {{ synced_items.customs | tojson | safe }};
-
       itemsData.actual  = {{ synced_items.actual | tojson | safe }};
-
     {% else %}
-
       itemsData.customs = {{ synced_items | tojson | safe }};
-
       itemsData.actual  = {{ synced_items | tojson | safe }};
-
     {% endif %}
-
   {% endif %}
+
+  // 兜底：如果 synced_items 没传或为空，但 tbody 已有后端 Jinja 渲染的数据行，
+  // 从 DOM 中读取 SKU/数量 同步到 itemsData（确保数据不丢失）
+  function syncFromBody(type) {
+    var body = document.getElementById(type + "Body");
+    if (!body) return;
+    if (itemsData[type] && itemsData[type].length > 0) return;
+    var rows = body.querySelectorAll("tr[data-type='" + type + "']");
+    if (rows.length === 0) return;
+    var synced = [];
+    rows.forEach(function(tr) {
+      var skuInput = tr.querySelector(".sku-autocomplete");
+      var qtyInput = tr.querySelector('input[type="number"]');
+      if (skuInput && qtyInput) {
+        synced.push({sku: skuInput.value, quantity: parseInt(qtyInput.value) || 0});
+      }
+    });
+    if (synced.length > 0) itemsData[type] = synced;
+  }
+  syncFromBody("customs");
+  syncFromBody("actual");
 
   syncHiddenFields();
 
@@ -642,6 +705,7 @@ function renderItemTable(type) {
   var body = document.getElementById(type + "Body");
   var foot = document.getElementById(type + "Foot");
   var data = itemsData[type] || [];
+
   body.innerHTML = "";
   foot.innerHTML = "";
 
@@ -717,7 +781,7 @@ function renderItemTable(type) {
     spanFreight.className = "freight-unit";
     spanFreight.style.cssText = "font-size:12px;color:#0d904f;font-weight:500;";
     var fu = it.freight_unit;
-    spanFreight.textContent = fu ? "$" + fu.toFixed(4) : "-";
+    spanFreight.textContent = fu ? "¥" + fu.toFixed(4) : "-";
     tdFreight.appendChild(spanFreight);
     tr.appendChild(tdFreight);
 
@@ -815,9 +879,18 @@ function showImagePreview(file) {
 }
 
 function showManualModal(type) {
+  // 调试：先弹一个 alert 确认函数被调用
+  if (typeof window.__DEBUG_ADD_BTN === "undefined" || window.__DEBUG_ADD_BTN) {
+    console.log("[DEBUG] showManualModal called, type=" + type);
+  }
+  // 如果已有 modal 先关闭
+  closeModal("manualModal");
   manualTarget = type;
   var ov = document.createElement("div");
   ov.className = "modal-overlay"; ov.id = "manualModal";
+  ov.style.display = "flex";
+  ov.style.zIndex = "9999";
+  ov.style.background = "rgba(0,0,0,0.5)";
   ov.innerHTML =
     '<div class="modal-box">'+
     '<h5 style="margin-bottom:14px;">'+(type==="customs"?"报关明细":"真实装柜明细")+' -- 添加/修改</h5>'+
@@ -827,6 +900,7 @@ function showManualModal(type) {
     '</div>'+
     '<div class="d-flex gap-2 mb-3">'+
     '<button type="button" class="btn btn-primary btn-sm" id="btnApply">确认修改</button>'+
+    '<button type="button" class="btn btn-outline-secondary btn-sm" onclick="closeModal(\'manualModal\')">关闭</button>'+
     '</div>'+
     '<div id="manMsg" style="font-size:13px;"></div>'+
     '</div>';
@@ -836,6 +910,8 @@ function showManualModal(type) {
   var manSkuEl = document.getElementById("manSku");
   var manSkuList = document.getElementById("manSkuList");
   if (manSkuEl && manSkuList) setupSkuAutocomplete(manSkuEl, manSkuList);
+  // 焦点
+  setTimeout(function(){ if (manSkuEl) manSkuEl.focus(); }, 50);
 }
 
 function manualOp() {
@@ -986,6 +1062,12 @@ function initColumnResize() {
 
 // ============================================================
 document.addEventListener("DOMContentLoaded", function() {
+  console.log("[form.html] DOMContentLoaded fired, itemsData=" + JSON.stringify(itemsData));
+  if (VIEW_ONLY) {
+    document.querySelectorAll("#containerForm input, #containerForm select, #containerForm textarea, #containerForm button").forEach(function(el) {
+      if (el.type !== "hidden") el.disabled = true;
+    });
+  }
   // 列宽拖动
   initColumnResize();
   // 直接渲染并绑定事件（SKU 数据已内嵌）
@@ -999,6 +1081,13 @@ document.addEventListener("DOMContentLoaded", function() {
       onFreightTotalChange(el);
     }
   });
+  // 真实装柜的实际总价固定为 5 项费用之和（人民币），不允许编辑；
+  // 但仍按 totalFreight / totalCbm 分摊到每行（仅当行数有 CBM 时有效）
+  var actualInput = document.querySelector('.freight-total-input[data-type="actual"]');
+  if (actualInput) {
+    _freightTotals["actual"] = parseFloat(actualInput.value) || 0;
+    onFreightTotalChange(actualInput);
+  }
   syncHiddenFields();
 
   document.querySelector("form").addEventListener("keydown", function(e) {

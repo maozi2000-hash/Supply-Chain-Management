@@ -3,7 +3,179 @@
 {% block title %}订单管理 — 供应商管理系统{% endblock %}
 {% block page_title %}订单管理{% endblock %}
 
+{% block extra_css %}
+<style>
+  .orders-table-scroll {
+    overflow-x: auto;
+  }
+  .orders-table-scroll {
+    overflow-x: auto;
+  }
+  .orders-table {
+    min-width: 880px;
+  }
+  .orders-table th,
+  .orders-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+  .orders-table .actions {
+    position: sticky;
+    right: 0;
+    z-index: 20;
+    width: 168px;
+    min-width: 168px;
+    max-width: 168px;
+    text-align: right;
+    background: #fff !important;
+    box-shadow: -10px 0 14px rgba(44, 62, 80, 0.08);
+  }
+  .orders-table .actions::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    background: inherit;
+    pointer-events: none;
+  }
+  .orders-table thead .actions {
+    z-index: 40;
+    background: #f8f9fa !important;
+    text-align: right;
+  }
+  .orders-table .actions::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -1px;
+    width: 1px;
+    background: inherit;
+    pointer-events: none;
+  }
+  .orders-table thead .actions {
+    background: transparent;
+    text-align: right;
+  }
+  .orders-actions-spacer {
+    width: 168px;
+    min-width: 168px;
+    padding: 0 !important;
+    color: transparent;
+  }
+  .orders-table-panel {
+    position: relative;
+    isolation: isolate;
+  }
+  .orders-table-panel .orders-table-scroll {
+    position: relative;
+    z-index: 1;
+  }
+  .orders-column-config-btn {
+    width: 26px;
+    height: 24px;
+    border: 1px solid #cfd8e3;
+    background: #fff;
+    color: #2c3e50;
+    border-radius: 4px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 22px;
+    text-align: center;
+  }
+  .orders-column-config-btn:hover {
+    border-color: #2c3e50;
+  }
+  .orders-column-config-floating {
+    position: fixed !important;
+    top: 110px !important;
+    right: 24px !important;
+    z-index: 1050 !important;
+  }
+  .orders-actions-cover {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 60;
+    width: 168px;
+    height: 44px;
+    background: #f8f9fa;
+    border-left: 1px solid #e5e9ef;
+    pointer-events: none;
+  }
+  .orders-column-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.22);
+  }
+  .orders-column-modal-backdrop.show {
+    display: flex;
+  }
+  .orders-column-modal {
+    width: min(760px, 94vw);
+    max-height: 78vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #d8e0ea;
+    border-radius: 6px;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  }
+  .orders-column-modal-header,
+  .orders-column-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid #edf1f5;
+  }
+  .orders-column-modal-footer {
+    border-top: 1px solid #edf1f5;
+    border-bottom: 0;
+  }
+  .orders-column-groups {
+    overflow: auto;
+    padding: 14px 16px;
+  }
+  .orders-column-group + .orders-column-group {
+    margin-top: 16px;
+  }
+  .orders-column-group-title {
+    margin-bottom: 8px;
+    color: #2c3e50;
+    font-weight: 600;
+  }
+  .orders-column-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px 18px;
+  }
+  .orders-column-option {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: 0;
+    color: #334155;
+    font-size: 13px;
+  }
+  .orders-column-option input {
+    width: 15px;
+    height: 15px;
+    accent-color: #2c3e50;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
+
+<!-- 列配置 浮按（fixed，置于 list-freeze-page 之外，脱离 panel 的 overflow:hidden） -->
+<button type="button" class="orders-column-config-btn orders-column-config-floating" data-column-config title="列配置" aria-label="列配置">⚙</button>
 
 <div class="list-freeze-page">
 
@@ -73,22 +245,24 @@
 
 {% if any_filter %}
 {# 筛选模式：单表混合（无分页） #}
-<div class="card mb-3 sku-result-card list-freeze-card">
+<div class="card mb-3 sku-result-card list-freeze-card orders-table-panel">
+  <div class="orders-actions-cover"></div>
   <div class="card-header d-flex justify-content-between align-items-center">
     <span>筛选条件：{{ filter_summary or '无' }} · 命中 {{ unified_search_results|length }} 条</span>
   </div>
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+  <div class="orders-table-scroll">
+    <table class="table table-hover mb-0 orders-table">
       <thead>
         <tr>
           <th style="width:32px;"><input type="checkbox" class="chk-ord-select-all"></th>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>客户名</th>
-          <th>订单状态</th>
-          <th>创建时间</th>
-          <th>匹配</th>
+          <th data-col="record_state">状态</th>
+          <th data-col="order_no">订单号</th>
+          <th data-col="supplier">供应商</th>
+          <th data-col="custom_name">客户名</th>
+          <th data-col="order_status">订单状态</th>
+          <th data-col="created_at">创建时间</th>
+          <th data-col="matched_count">匹配</th>
+          <th class="orders-actions-spacer" aria-hidden="true"></th>
           <th class="actions">操作</th>
         </tr>
       </thead>
@@ -98,19 +272,20 @@
           {% set o = r.order %}
           <tr {% if not r.containerized %}class="row-pending"{% endif %} data-type="order">
             <td><input type="checkbox" class="chk-ord" data-id="{{ o.id }}" value="{{ o.id }}"></td>
-            <td>
+            <td data-col="record_state">
               {% if r.containerized %}
               <span class="badge bg-light text-dark border">已装柜</span>
               {% else %}
               <span class="badge bg-light text-secondary border">待装柜</span>
               {% endif %}
             </td>
-            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-            <td>{{ o.supplier_name }}</td>
-            <td>{{ o.custom_name or '-' }}</td>
-            <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
-            <td class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '' }}</td>
-            <td><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td data-col="order_no"><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+            <td data-col="supplier">{{ o.supplier_name }}</td>
+            <td data-col="custom_name">{{ o.custom_name or '-' }}</td>
+            <td data-col="order_status"><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td data-col="created_at" class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '' }}</td>
+            <td data-col="matched_count"><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td class="orders-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
               <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('orders.edit_order', id=o.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
@@ -118,7 +293,7 @@
           </tr>
           {% endfor %}
         {% else %}
-        <tr><td colspan="9">
+        <tr><td colspan="16">
           <div class="text-center text-muted py-4">没有订单匹配当前筛选条件</div>
         </td></tr>
         {% endif %}
@@ -129,18 +304,20 @@
 
 {% else %}
 {# 默认视图：单表混合（未装柜 + 已装柜分页） #}
-<div class="card list-freeze-card">
-  <div class="table-responsive">
-    <table class="table table-hover mb-0">
+<div class="card list-freeze-card orders-table-panel">
+  <div class="orders-actions-cover"></div>
+  <div class="orders-table-scroll">
+    <table class="table table-hover mb-0 orders-table">
       <thead>
         <tr>
           <th style="width:32px;"><input type="checkbox" id="chkAll" style="cursor:pointer;"></th>
-          <th>状态</th>
-          <th>订单号</th>
-          <th>供应商</th>
-          <th>客户名</th>
-          <th>订单状态</th>
-          <th>创建时间</th>
+          <th data-col="record_state">状态</th>
+          <th data-col="order_no">订单号</th>
+          <th data-col="supplier">供应商</th>
+          <th data-col="custom_name">客户名</th>
+          <th data-col="order_status">订单状态</th>
+          <th data-col="created_at">创建时间</th>
+          <th class="orders-actions-spacer" aria-hidden="true"></th>
           <th class="actions">操作</th>
         </tr>
       </thead>
@@ -150,18 +327,19 @@
           {% set o = r.order %}
           <tr {% if not r.containerized %}class="row-pending"{% endif %} data-type="order">
             <td><input type="checkbox" class="chk-ord" data-id="{{ o.id }}" value="{{ o.id }}"></td>
-            <td>
+            <td data-col="record_state">
               {% if r.containerized %}
               <span class="badge bg-light text-dark border">已装柜</span>
               {% else %}
               <span class="badge bg-light text-secondary border">待装柜</span>
               {% endif %}
             </td>
-            <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
-            <td>{{ o.supplier_name }}</td>
-            <td>{{ o.custom_name or '-' }}</td>
-            <td><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
-            <td class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '' }}</td>
+            <td data-col="order_no"><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+            <td data-col="supplier">{{ o.supplier_name }}</td>
+            <td data-col="custom_name">{{ o.custom_name or '-' }}</td>
+            <td data-col="order_status"><span class="badge badge-status status-{{ o.status }}">{{ o.status }}</span></td>
+            <td data-col="created_at" class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '' }}</td>
+            <td class="orders-actions-spacer" aria-hidden="true"></td>
             <td class="actions">
               <a href="{{ url_for('orders.order_detail', id=o.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
               <a href="{{ url_for('orders.edit_order', id=o.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
@@ -172,7 +350,7 @@
           </tr>
           {% endfor %}
         {% else %}
-        <tr><td colspan="8">
+        <tr><td colspan="16">
           <div class="text-center text-muted py-5">
             <p class="mb-2">暂无订单数据</p>
             <a href="{{ url_for('orders.new_order') }}" class="btn btn-secondary">创建第一条订单</a>
@@ -287,6 +465,24 @@
   </div>
 </div>
 
+<!-- 列配置 模态框 -->
+<div class="orders-column-modal-backdrop" id="ordersColumnModal" aria-hidden="true">
+  <div class="orders-column-modal" role="dialog" aria-modal="true" aria-labelledby="ordersColumnModalTitle">
+    <div class="orders-column-modal-header">
+      <h5 class="mb-0" id="ordersColumnModalTitle">列配置</h5>
+      <button type="button" class="btn-close" aria-label="关闭" data-column-cancel></button>
+    </div>
+    <div class="orders-column-groups" id="ordersColumnGroups"></div>
+    <div class="orders-column-modal-footer">
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="ordersColumnReset">恢复默认</button>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-column-cancel>取消</button>
+        <button type="button" class="btn btn-sm btn-secondary" id="ordersColumnSave">保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <style>
   .modal-overlay {
     display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1050;
@@ -356,6 +552,138 @@ function jumpToPage() {
   url.searchParams.set('page', page);
   window.location.href = url.toString();
 }
+
+// ===== 列配置 =====
+var ORDERS_COLUMN_STORAGE_KEY = "orders.visibleColumns";
+var ORDERS_COLUMN_GROUPS = [
+  {
+    title: "基础信息",
+    columns: [
+      { key: "record_state", label: "状态", defaultVisible: true },
+      { key: "order_no", label: "订单号", defaultVisible: true },
+      { key: "supplier", label: "供应商", defaultVisible: true },
+      { key: "custom_name", label: "客户名", defaultVisible: true }
+    ]
+  },
+  {
+    title: "订单详情",
+    columns: [
+      { key: "order_status", label: "订单状态", defaultVisible: true },
+      { key: "created_at", label: "创建时间", defaultVisible: true },
+      { key: "matched_count", label: "匹配", defaultVisible: true }
+    ]
+  }
+];
+
+function getAllOrdersColumns() {
+  return ORDERS_COLUMN_GROUPS.reduce(function(cols, group) {
+    return cols.concat(group.columns);
+  }, []);
+}
+
+function getDefaultOrdersVisibleColumns() {
+  return getAllOrdersColumns()
+    .filter(function(col) { return col.defaultVisible; })
+    .map(function(col) { return col.key; });
+}
+
+function loadOrdersVisibleColumns() {
+  var allKeys = getAllOrdersColumns().map(function(col) { return col.key; });
+  try {
+    var raw = localStorage.getItem(ORDERS_COLUMN_STORAGE_KEY);
+    if (!raw) return getDefaultOrdersVisibleColumns();
+    var stored = JSON.parse(raw);
+    if (!Array.isArray(stored)) return getDefaultOrdersVisibleColumns();
+    return stored.filter(function(key) { return allKeys.indexOf(key) !== -1; });
+  } catch (err) {
+    return getDefaultOrdersVisibleColumns();
+  }
+}
+
+function saveOrdersVisibleColumns(columns) {
+  localStorage.setItem(ORDERS_COLUMN_STORAGE_KEY, JSON.stringify(columns));
+}
+
+function applyOrdersVisibleColumns(columns) {
+  var visible = new Set(columns);
+  document.querySelectorAll("[data-col]").forEach(function(cell) {
+    cell.style.display = visible.has(cell.getAttribute("data-col")) ? "" : "none";
+  });
+}
+
+function openOrdersColumnModal() {
+  var modal = document.getElementById("ordersColumnModal");
+  if (!modal) return;
+  var visible = new Set(loadOrdersVisibleColumns());
+  document.querySelectorAll(".orders-column-checkbox").forEach(function(input) {
+    input.checked = visible.has(input.value);
+  });
+  modal.classList.add("show");
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function closeOrdersColumnModal() {
+  var modal = document.getElementById("ordersColumnModal");
+  if (!modal) return;
+  modal.classList.remove("show");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function renderOrdersColumnOptions() {
+  var container = document.getElementById("ordersColumnGroups");
+  if (!container) return;
+  var visible = new Set(loadOrdersVisibleColumns());
+  container.innerHTML = ORDERS_COLUMN_GROUPS.map(function(group) {
+    var options = group.columns.map(function(col) {
+      var checked = visible.has(col.key) ? "checked" : "";
+      return '<label class="orders-column-option">' +
+        '<input type="checkbox" class="orders-column-checkbox" value="' + col.key + '" ' + checked + '>' +
+        '<span>' + col.label + '</span>' +
+      '</label>';
+    }).join("");
+    return '<div class="orders-column-group">' +
+      '<div class="orders-column-group-title">' + group.title + '</div>' +
+      '<div class="orders-column-options">' + options + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function initOrdersColumns() {
+  renderOrdersColumnOptions();
+  applyOrdersVisibleColumns(loadOrdersVisibleColumns());
+  document.querySelectorAll("[data-column-config]").forEach(function(btn) {
+    btn.addEventListener("click", openOrdersColumnModal);
+  });
+  document.querySelectorAll("[data-column-cancel]").forEach(function(btn) {
+    btn.addEventListener("click", closeOrdersColumnModal);
+  });
+  var modal = document.getElementById("ordersColumnModal");
+  if (modal) {
+    modal.addEventListener("click", function(e) {
+      if (e.target === modal) closeOrdersColumnModal();
+    });
+  }
+  var saveBtn = document.getElementById("ordersColumnSave");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", function() {
+      var selected = Array.from(document.querySelectorAll(".orders-column-checkbox:checked"))
+        .map(function(input) { return input.value; });
+      saveOrdersVisibleColumns(selected);
+      applyOrdersVisibleColumns(selected);
+      closeOrdersColumnModal();
+    });
+  }
+  var resetBtn = document.getElementById("ordersColumnReset");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", function() {
+      var defaults = getDefaultOrdersVisibleColumns();
+      saveOrdersVisibleColumns(defaults);
+      renderOrdersColumnOptions();
+      applyOrdersVisibleColumns(defaults);
+    });
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   var chkAll = document.getElementById('chkAll') || document.querySelector('.chk-ord-select-all');
   if (chkAll) {
@@ -369,6 +697,7 @@ document.addEventListener('DOMContentLoaded', function() {
     cb.addEventListener('change', updateExportBar);
   });
   updateExportBar();
+  initOrdersColumns();
 });
 </script>
 {% endblock %}

@@ -1,4 +1,4 @@
-{# 装柜详情页 #}
+﻿{# 装柜详情页 #}
 {% extends "base.html" %}
 {% block title %}装柜详情 {{ container.container_no }}{% endblock %}
 {% block page_title %}装柜详情：{{ container.container_no }}{% endblock %}
@@ -13,8 +13,30 @@
 @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
 .diff-extra { color: #c5221f; font-weight: 600; }
 .diff-missing { color: #1a73e8; font-weight: 600; }
+
+/* 详情页两框表格 UI 同步：固定列宽 + 等宽分布 */
+.detail-items-table { table-layout: fixed; width: 100%; }
+.detail-items-table th,
+.detail-items-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.detail-items-table th:nth-child(1),
+.detail-items-table td:nth-child(1) { width: 28%; }  /* SKU */
+.detail-items-table th:nth-child(2),
+.detail-items-table td:nth-child(2) { width: 12%; text-align: right; }  /* 数量 */
+.detail-items-table th:nth-child(3),
+.detail-items-table td:nth-child(3) { width: 20%; text-align: right; }  /* 产品单价 */
+.detail-items-table th:nth-child(4),
+.detail-items-table td:nth-child(4) { width: 40%; text-align: right; }  /* 预估/实际单价 */
+.detail-items-table tfoot td { font-weight: 600; }
 </style>
 {% endblock %}
+
+{# Jinja2 set 必须在 block 外才能被其他 block 看到 #}
+{% set _fee_dom = container.domestic_transport_fee or 0 if container is defined and container else 0 %}
+{% set _fee_ocean = container.ocean_freight_fee or 0 if container is defined and container else 0 %}
+{% set _fee_truck = container.overseas_truck_fee or 0 if container is defined and container else 0 %}
+{% set _fee_shelv = container.shelving_fee or 0 if container is defined and container else 0 %}
+{% set _fee_other = container.other_fee or 0 if container is defined and container else 0 %}
+{% set _fee_total = _fee_dom + _fee_ocean + _fee_truck + _fee_shelv + _fee_other %}
 
 {% block content %}
 
@@ -30,7 +52,7 @@
   </div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-sm-6 col-lg-4"><label class="form-label">关联订单</label><p>{% if container.order %}<a href="{{ url_for('orders.order_detail', id=container.order.id) }}">{{ container.order.order_no }}</a> -- {{ container.order.supplier_name }}{% else %}-{% endif %}</p></div>
+      <div class="col-sm-6 col-lg-4"><label class="form-label">关联订单</label><p>{% if container.order %}<a href="{{ url_for('orders.order_detail', id=container.order.id, source='container') }}">{{ container.order.order_no }}</a> -- {{ container.order.supplier_name }}{% else %}-{% endif %}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">关联订舱</label><p>{% if container.booking %}{{ container.booking.custom_name or '' }} {{ container.booking.vessel_voyage or '' }} / {{ container.booking.shipping_company or '' }}{% else %}-{% endif %}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">柜号</label><p class="fw-bold">{{ container.container_no }}</p></div>
       <div class="col-sm-6 col-lg-4"><label class="form-label">装柜日期</label><p>{{ container.loading_date.strftime('%Y-%m-%d') if container.loading_date else '' }}</p></div>
@@ -39,6 +61,52 @@
       <div class="col-sm-6 col-lg-4"><label class="form-label">体积 (CBM)</label><p>{{ '%.2f'|format(container.volume) if container.volume else '' }}</p></div>
       {% if container.remarks %}<div class="col-12"><label class="form-label">备注</label><p>{{ container.remarks }}</p></div>{% endif %}
     </div>
+  </div>
+</div>
+
+<!-- 费用明细（人民币） -->
+{% set _fee_dom = container.domestic_transport_fee or 0 %}
+{% set _fee_ocean = container.ocean_freight_fee or 0 %}
+{% set _fee_truck = container.overseas_truck_fee or 0 %}
+{% set _fee_shelv = container.shelving_fee or 0 %}
+{% set _fee_other = container.other_fee or 0 %}
+{% set _fee_total = _fee_dom + _fee_ocean + _fee_truck + _fee_shelv + _fee_other %}
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>费用明细（人民币）</span>
+    <span>
+      <span class="text-muted small">总价：</span>
+      <strong class="text-danger" style="font-size:16px;">¥{{ '%.2f'|format(_fee_total) }}</strong>
+    </span>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="text-muted small">国内运输费用</div>
+        <div class="fw-semibold">¥{{ '%.2f'|format(_fee_dom) }}</div>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="text-muted small">海运费</div>
+        <div class="fw-semibold">¥{{ '%.2f'|format(_fee_ocean) }}</div>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="text-muted small">国外拖车费</div>
+        <div class="fw-semibold">¥{{ '%.2f'|format(_fee_truck) }}</div>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="text-muted small">上架费</div>
+        <div class="fw-semibold">¥{{ '%.2f'|format(_fee_shelv) }}</div>
+      </div>
+      <div class="col-6 col-md-4 col-lg-3">
+        <div class="text-muted small">其他费用</div>
+        <div class="fw-semibold">¥{{ '%.2f'|format(_fee_other) }}</div>
+      </div>
+    </div>
+    {% if container.fee_remark %}
+    <div class="mt-3 pt-2 small text-muted" style="border-top:1px dashed #e5e9ef;">
+      备注：{{ container.fee_remark }}
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -52,7 +120,7 @@
       {% endif %}
     </div>
     <div class="table-responsive">
-      <table class="table items-table">
+      <table class="table items-table detail-items-table">
         <thead><tr><th>SKU</th><th>数量</th><th>产品单价</th><th>预估单价</th></tr></thead>
         <tbody>
           {% if customs_items %}{% for it in customs_items %}
@@ -76,13 +144,11 @@
 
   <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-      装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)
-      {% if container.actual_freight %}
-      <span style="font-size:12px;font-weight:400;color:#0d904f;">实际总价 ${{ '%.2f'|format(container.actual_freight) }}</span>
-      {% endif %}
+      <span>装柜数据(真实) ({{ actual_items|length if actual_items else 0 }} 条)</span>
+      <span style="font-size:12px;font-weight:400;color:#c5221f;">实际总价 ¥{{ '%.2f'|format(_fee_total) }} <small class="text-muted">(取自费用明细)</small></span>
     </div>
     <div class="table-responsive">
-      <table class="table items-table">
+      <table class="table items-table detail-items-table">
         <thead><tr><th>SKU</th><th>数量</th><th>产品单价</th><th>实际单价</th></tr></thead>
         <tbody>
           {% if actual_items %}{% for it in actual_items %}
@@ -149,10 +215,12 @@ _skuVolumes["{{ sku }}"] = {{ info.volume_m3 }};
 {% endfor %}
 
 // 页面加载时根据数据库中的头程总价自动计算
+// - customs (预估)：按 estimated_freight 总额分摊，单位 ¥
+// - actual  (实际)：按 5 项费用之和（人民币）分摊，单位 ¥
 (function() {
   var freightData = {
     customs: {{ container.estimated_freight or 0 }},
-    actual: {{ container.actual_freight or 0 }}
+    actual: {{ _fee_total }}
   };
   for (var type in freightData) {
     var totalFreight = freightData[type];
@@ -170,7 +238,7 @@ _skuVolumes["{{ sku }}"] = {{ info.volume_m3 }};
     cells.forEach(function(cell) {
       var sku = cell.getAttribute("data-sku");
       var vol = _skuVolumes[sku] || 0;
-      cell.textContent = "$" + (vol * rate).toFixed(4);
+      cell.textContent = "¥" + (vol * rate).toFixed(4);
     });
   }
 })();
@@ -184,7 +252,7 @@ function copyDetailColumn(type, col) {
     var qty = cell.getAttribute("data-qty");
     if (col === "sku") { vals.push(sku); }
     else if (col === "quantity") { vals.push(qty); }
-    else if (col === "freight") { vals.push(cell.textContent.replace("$","")); }
+    else if (col === "freight") { vals.push(cell.textContent.replace("¥","").replace("$","")); }
   });
   navigator.clipboard.writeText(vals.join("\n")).then(function() {
     showDetailToast("已复制 " + vals.length + " 行");
@@ -213,3 +281,4 @@ function showImage(src) {
 
 </script>
 {% endblock %}
+

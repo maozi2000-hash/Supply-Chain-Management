@@ -15,6 +15,7 @@
   --border-color: #dfe5eb;
   --sidebar-width: 176px;
   --navbar-height: 58px;
+  --subpage-tabs-height: 40px;
   --radius: 6px;
   --shadow-sm: 0 1px 2px rgba(20, 32, 44, 0.05), 0 8px 24px rgba(20, 32, 44, 0.04);
   --shadow-md: 0 10px 30px rgba(20, 32, 44, 0.10);
@@ -163,6 +164,120 @@ a:hover {
   font-size: 13px;
 }
 
+.subpage-tabs {
+  position: sticky;
+  top: var(--navbar-height);
+  z-index: 1018;
+  height: var(--subpage-tabs-height);
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0 24px;
+  background: #f8fafb;
+  border-bottom: 1px solid var(--border-color);
+  scrollbar-width: thin;
+}
+
+.subpage-tab {
+  position: relative;
+  min-width: 104px;
+  max-width: 220px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  color: var(--text-muted);
+  background: #f2f5f7;
+  border: 1px solid var(--border-color);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  font-size: 13px;
+  font-weight: 550;
+  white-space: nowrap;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.72);
+}
+
+.subpage-tab + .subpage-tab {
+  margin-left: -1px;
+}
+
+.subpage-tab:hover {
+  color: var(--primary-dark);
+  background: #ffffff;
+}
+
+.subpage-tab.active {
+  z-index: 1;
+  height: 36px;
+  color: var(--primary-dark);
+  background: #ffffff;
+  border-color: #cfd8e1;
+  box-shadow: inset 0 3px 0 var(--primary);
+}
+
+.subpage-tab-link {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subpage-tab-link:hover {
+  color: inherit;
+}
+
+.subpage-tab-close {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  padding: 0;
+  color: #7a8795;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.subpage-tab-close:hover {
+  color: #ffffff;
+  background: var(--primary);
+}
+
+.subpage-tabs-close-all {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin: 0 0 4px 10px;
+  padding: 0 12px;
+  color: var(--primary);
+  background: #ffffff;
+  border: 1px solid #cfd8e1;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.subpage-tabs-close-all:hover {
+  color: #ffffff;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
 .mobile-menu-btn {
   display: none;
   background: transparent;
@@ -178,7 +293,7 @@ a:hover {
 }
 
 .page-content:has(.list-freeze-page) {
-  height: calc(100vh - var(--navbar-height));
+  height: calc(100vh - var(--navbar-height) - var(--subpage-tabs-height));
   padding-bottom: 0;
   overflow: hidden;
 }
@@ -699,6 +814,32 @@ input[type="checkbox"] {
   box-shadow: var(--shadow-md) !important;
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1060;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 16px 24px;
+  background: rgba(15, 23, 42, 0.45);
+  overflow-y: auto;
+}
+
+.modal-overlay[style*="display: flex"],
+.modal-overlay[style*="display:flex"] {
+  display: flex !important;
+}
+
+.modal-box {
+  width: 520px;
+  max-width: 100%;
+  padding: 22px 24px;
+  background: #fff;
+}
+
+body.modal-open { overflow: hidden; }
+
 .copy-btn {
   color: var(--text-muted) !important;
   min-width: 34px;
@@ -858,6 +999,12 @@ input[type="checkbox"] {
   .main-wrapper { margin-left: 0; }
   .page-content { padding: 16px; }
   .topbar { padding: 0 16px; }
+  .subpage-tabs { padding: 0 16px; }
+  .subpage-tab {
+    min-width: 96px;
+    max-width: 180px;
+    padding-left: 12px;
+  }
   .mobile-menu-btn { display: inline-block !important; }
   .search-bar { flex-direction: column; }
   .search-bar .form-control,

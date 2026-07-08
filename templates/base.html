@@ -51,6 +51,14 @@
       </div>
       <div class="user-menu">
         {% if current_user.is_authenticated %}
+          {% if current_user.role == 'admin' %}
+            <a href="{{ url_for('admin.backup_database') }}" class="btn btn-outline-primary btn-sm" title="下载当前数据库完整备份（database.db）">
+              <span style="margin-right:4px;">⬇</span>备份数据
+            </a>
+            <button type="button" class="btn btn-outline-danger btn-sm" id="btnRestoreData" title="上传 .db 文件覆盖当前数据，操作前会自动备份">
+              <span style="margin-right:4px;">⬆</span>恢复数据
+            </button>
+          {% endif %}
           <span class="text-muted">{{ current_user.display_name or current_user.username }}</span>
           <a href="{{ url_for('auth.logout') }}" class="btn btn-outline-secondary btn-sm">退出</a>
         {% else %}
@@ -59,19 +67,33 @@
       </div>
     </nav>
 
+    {% if current_user.is_authenticated %}
+    <div
+      class="subpage-tabs"
+      id="subpageTabs"
+      aria-label="已打开页面"
+      data-active-menu="{{ active_menu or '' }}"
+      data-dashboard-url="{{ url_for('index') }}"
+      data-orders-url="{{ url_for('orders.list_orders') }}"
+      data-booking-url="{{ url_for('booking.list_booking') }}"
+      data-container-url="{{ url_for('container.list_container') }}"
+      data-sku-url="{{ url_for('sku.list_sku') }}"
+    ></div>
+    {% endif %}
+
     <!-- Flash 消息 -->
-    <div class="flash-messages px-3 pt-3">
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash-messages px-3 pt-3">
           {% for category, message in messages %}
             <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
               {{ message }}
               <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
           {% endfor %}
-        {% endif %}
-      {% endwith %}
-    </div>
+      </div>
+      {% endif %}
+    {% endwith %}
 
     <!-- 页面主体内容 -->
     <div class="page-content">
@@ -82,5 +104,215 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   {% block extra_js %}{% endblock %}
+
+  {% if current_user.is_authenticated and current_user.role == 'admin' %}
+  <style>
+  /* 长按确认按钮 */
+  .hold-confirm-btn {
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: color .15s, background-color .15s, border-color .15s;
+  }
+  .hold-confirm-btn .hold-confirm-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 0%;
+    background: rgba(220, 53, 69, 0.18);
+    transition: width .05s linear;
+    pointer-events: none;
+  }
+  .hold-confirm-btn.holding { border-color: #dc3545; }
+  .hold-confirm-btn.confirmed {
+    background: #dc3545;
+    color: #fff;
+    border-color: #dc3545;
+  }
+  .hold-confirm-btn .hold-confirm-text {
+    position: relative;
+    z-index: 1;
+    font-weight: 500;
+  }
+  </style>
+
+  <!-- 恢复数据 模态框 -->
+  <div class="modal fade" id="restoreDataModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#fff3cd;color:#856404;">
+          <h5 class="modal-title">⚠ 恢复数据（覆盖当前数据库）</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="restoreForm" enctype="multipart/form-data">
+          <div class="modal-body">
+            <div class="alert alert-warning small mb-3" role="alert">
+              <strong>此操作将完全覆盖当前数据库</strong>，包括 SKU、订单、订舱、装柜等所有数据。<br>
+              提交前系统会自动备份当前数据库到 <code>data/backups/</code>。
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small">1. 选择 .db 备份文件</label>
+              <input type="file" class="form-control form-control-sm" name="file" id="restoreFile" accept=".db" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label small">2. 管理员密码</label>
+              <input type="password" class="form-control form-control-sm" name="admin_password" id="restorePassword" required autocomplete="off">
+            </div>
+
+            <div class="mb-2">
+              <label class="form-label small">3. 长按下方按钮 1.5 秒以确认覆盖</label>
+              <button type="button" class="hold-confirm-btn btn btn-outline-danger btn-sm w-100" id="holdConfirmBtn">
+                <span class="hold-confirm-fill" id="holdConfirmFill"></span>
+                <span class="hold-confirm-text" id="holdConfirmText">长按 1.5 秒确认覆盖</span>
+              </button>
+              <input type="hidden" name="hold_confirmed" id="holdConfirmed" value="">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+            <button type="submit" class="btn btn-danger btn-sm" id="restoreSubmitBtn">
+              <span id="restoreSubmitText">确认恢复</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var btn = document.getElementById('btnRestoreData');
+    if (!btn) return;
+    var modalEl = document.getElementById('restoreDataModal');
+    var modal = new bootstrap.Modal(modalEl);
+    var form = document.getElementById('restoreForm');
+    var submitBtn = document.getElementById('restoreSubmitBtn');
+    var submitText = document.getElementById('restoreSubmitText');
+    var holdBtn = document.getElementById('holdConfirmBtn');
+    var holdFill = document.getElementById('holdConfirmFill');
+    var holdText = document.getElementById('holdConfirmText');
+    var holdConfirmedInput = document.getElementById('holdConfirmed');
+
+    var HOLD_MS = 1500;     // 长按 1.5 秒
+    var TICK_MS = 50;       // 进度刷新频率
+    var holdTimer = null;
+    var holdStart = 0;
+    var confirmed = false;
+
+    function resetHold() {
+      if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+      holdStart = 0;
+      holdFill.style.width = '0%';
+      holdBtn.classList.remove('holding');
+      if (confirmed) {
+        // 已经是确认状态，不重置文案；只在重新打开弹窗时才会重置
+      } else {
+        holdText.textContent = '长按 1.5 秒确认覆盖';
+      }
+    }
+
+    function startHold(e) {
+      if (confirmed) return;
+      e.preventDefault();
+      holdBtn.classList.add('holding');
+      holdText.textContent = '正在确认…';
+      holdStart = Date.now();
+      holdTimer = setInterval(function() {
+        var elapsed = Date.now() - holdStart;
+        var pct = Math.min(100, (elapsed / HOLD_MS) * 100);
+        holdFill.style.width = pct + '%';
+        var left = Math.max(0, Math.ceil((HOLD_MS - elapsed) / 1000));
+        holdText.textContent = '保持按住（' + left + ' 秒）';
+        if (elapsed >= HOLD_MS) {
+          clearInterval(holdTimer); holdTimer = null;
+          confirmed = true;
+          holdConfirmedInput.value = 'yes';
+          holdBtn.classList.remove('holding');
+          holdBtn.classList.add('confirmed');
+          holdFill.style.width = '100%';
+          holdText.textContent = '✓ 已确认覆盖';
+        }
+      }, TICK_MS);
+    }
+
+    function cancelHold(e) {
+      if (confirmed) return;
+      if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+      holdStart = 0;
+      holdFill.style.width = '0%';
+      holdBtn.classList.remove('holding');
+      holdText.textContent = '长按 1.5 秒确认覆盖';
+    }
+
+    // 同时支持鼠标和触屏
+    holdBtn.addEventListener('mousedown', startHold);
+    holdBtn.addEventListener('touchstart', startHold, {passive: false});
+    ['mouseup', 'mouseleave', 'mouseout', 'blur'].forEach(function(ev) {
+      holdBtn.addEventListener(ev, cancelHold);
+    });
+    ['touchend', 'touchcancel'].forEach(function(ev) {
+      holdBtn.addEventListener(ev, cancelHold);
+    });
+    // 防止按钮被右键菜单 / 选中干扰
+    holdBtn.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+
+    btn.addEventListener('click', function() {
+      form.reset();
+      // 重置长按状态
+      confirmed = false;
+      holdConfirmedInput.value = '';
+      holdFill.style.width = '0%';
+      holdBtn.classList.remove('holding', 'confirmed');
+      holdText.textContent = '长按 1.5 秒确认覆盖';
+      // 重置提交按钮
+      submitBtn.disabled = false;
+      submitText.textContent = '确认恢复';
+      modal.show();
+    });
+
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+
+      var fileInput = document.getElementById('restoreFile');
+      if (!fileInput.files.length) {
+        alert('请选择 .db 文件');
+        return;
+      }
+      var pwd = document.getElementById('restorePassword').value;
+      if (!pwd) { alert('请输入管理员密码'); return; }
+      if (!confirmed) { alert('请长按确认按钮 1.5 秒'); return; }
+
+      if (!window.confirm('最终确认：恢复将覆盖当前所有数据，是否继续？')) return;
+
+      var fd = new FormData(form);
+      submitBtn.disabled = true;
+      submitText.textContent = '处理中...';
+
+      fetch('{{ url_for("admin.restore_database") }}', {
+        method: 'POST',
+        body: fd
+      })
+      .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+      .then(function(res) {
+        if (res.ok && res.data.success) {
+          alert(res.data.message + (res.data.backup ? '\n自动备份文件：' + res.data.backup : ''));
+          setTimeout(function() { location.reload(); }, 3000);
+        } else {
+          alert('恢复失败：' + (res.data.error || '未知错误'));
+          submitBtn.disabled = false;
+          submitText.textContent = '确认恢复';
+        }
+      })
+      .catch(function(err) {
+        alert('请求失败：' + err);
+        submitBtn.disabled = false;
+        submitText.textContent = '确认恢复';
+      });
+    });
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>

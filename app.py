@@ -8,15 +8,39 @@ from models import db, User
 
 
 def ensure_schema(app):
-    """Add lightweight columns for existing local SQLite databases."""
+    """Add lightweight columns for existing local SQLite databases.
+    自动修复：缺少的费用列会被自动添加；已存在则跳过（容错）。
+    """
+    from sqlalchemy import text
     with app.app_context():
         with db.engine.connect() as conn:
-            columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(booking_records)").fetchall()]
-            if "eta" not in columns:
-                conn.exec_driver_sql("ALTER TABLE booking_records ADD COLUMN eta VARCHAR(100)")
+            # 订舱表
+            try:
+                columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(booking_records)").fetchall()]
+                if "eta" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE booking_records ADD COLUMN eta VARCHAR(100)")
+                    conn.commit()
+                conn.exec_driver_sql("UPDATE booking_records SET status = '已订舱' WHERE status = '已出运'")
                 conn.commit()
-            conn.exec_driver_sql("UPDATE booking_records SET status = '已订舱' WHERE status = '已出运'")
-            conn.commit()
+            except Exception as e:
+                print(f"[ensure_schema] booking_records 跳过: {e}")
+
+            # 装柜记录：补齐 5 项实际费用字段 + 备注
+            try:
+                cr_columns = [row[1] for row in conn.exec_driver_sql("PRAGMA table_info(container_records)").fetchall()]
+                for col, ddl in [
+                    ("domestic_transport_fee", "FLOAT DEFAULT 0"),
+                    ("ocean_freight_fee",       "FLOAT DEFAULT 0"),
+                    ("overseas_truck_fee",      "FLOAT DEFAULT 0"),
+                    ("shelving_fee",            "FLOAT DEFAULT 0"),
+                    ("other_fee",               "FLOAT DEFAULT 0"),
+                    ("fee_remark",              "TEXT"),
+                ]:
+                    if col not in cr_columns:
+                        conn.exec_driver_sql(f"ALTER TABLE container_records ADD COLUMN {col} {ddl}")
+                        conn.commit()
+            except Exception as e:
+                print(f"[ensure_schema] container_records 跳过: {e}")
 
 
 def create_app():
@@ -71,6 +95,9 @@ def create_app():
     app.register_blueprint(container_bp)
     from routes.sku import sku_bp
     app.register_blueprint(sku_bp)
+
+    from routes.admin import admin_bp
+    app.register_blueprint(admin_bp)
 
     # 首页仪表盘
     @app.route("/")
