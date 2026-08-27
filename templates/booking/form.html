@@ -117,6 +117,7 @@ body.dragging * { user-select: none !important; }
         <input type="hidden" name="order_id" value="{{ booking.order_id }}">
       {% endif %}
 
+<<<<<<< Updated upstream
       <div class="mt-4 d-flex gap-2">
         {% if view_only %}
         {% if booking %}
@@ -130,6 +131,14 @@ body.dragging * { user-select: none !important; }
         <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">返回列表</a>
         {% endif %}
       </div>
+=======
+      <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          {% if booking %}保存修改{% else %}创建订舱{% endif %}
+        </button>
+        <a href="{{ url_for('booking.list_booking') }}" class="btn btn-outline-secondary">返回列表</a>
+      </div>
+>>>>>>> Stashed changes
     </form>
 
   </div>

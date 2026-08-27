@@ -149,6 +149,7 @@ def _save_items(container, customs_json, actual_json):
 def list_container():
     """统一列表：未装柜的订单 + 已装柜的记录（单表混合）；支持多条件筛选（SKU / 柜号 / 订单号 / 供应商 / 提单号 / 客户名 / 装柜日期）。"""
     page = request.args.get("page", 1, type=int)
+<<<<<<< Updated upstream
     per_page = request.args.get("per_page", 15, type=int)
     if per_page not in (20, 50, 100, 200):
         per_page = 15
@@ -320,12 +321,56 @@ def list_container():
             unified_records.append({"kind": "order", "id": o.id, "order": o, "container": None, "matched_count": 0, "matched_items": []})
         for cr in container_records:
             unified_records.append({"kind": "container", "id": cr.id, "order": cr.order, "container": cr, "matched_count": 0, "matched_items": [], "fees": _fees_dict(cr)})
+=======
+    sku_query = (request.args.get("sku") or "").strip()
+    container_id_focus = request.args.get("focus_container", type=int)
+
+    pagination = ContainerRecord.query.order_by(db.desc(ContainerRecord.id)).paginate(
+        page=page, per_page=15, error_out=False
+    )
+    # 还没装柜的订单
+    pending_subq = db.session.query(ContainerRecord.order_id).distinct()
+    pending_orders = Order.query.filter(
+        ~Order.id.in_(pending_subq),
+        Order.status.notin_(["已取消", "装柜完成"])
+    ).order_by(db.desc(Order.created_at)).limit(50).all()
+
+    # SKU 搜索：返回匹配的装柜记录 + 匹配明细数量
+    search_results = []  # list of {container, matched_count, total_count, items}
+    focus_container = None
+    focus_items = []
+    if sku_query:
+        # 找到所有包含此 SKU 的 actual_items
+        from models import ActualItem
+        matched = ActualItem.query.filter(ActualItem.sku.ilike(f"%{sku_query}%")).all()
+        # 按 container_id 聚合
+        from collections import OrderedDict
+        agg = OrderedDict()
+        for it in matched:
+            agg.setdefault(it.container_record_id, []).append(it)
+        for cid, items in agg.items():
+            cr = db.session.get(ContainerRecord, cid)
+            if cr:
+                search_results.append({
+                    "container": cr,
+                    "matched_count": len(items),
+                    "matched_items": items,
+                })
+        # 焦点柜号：拉取该柜号所有 SKU 用于展开
+        if container_id_focus:
+            focus_container = db.session.get(ContainerRecord, container_id_focus)
+            if focus_container:
+                focus_items = ActualItem.query.filter_by(
+                    container_record_id=container_id_focus
+                ).order_by(ActualItem.id).all()
+>>>>>>> Stashed changes
 
     return render_template(
         "container/list.html", active_menu="container",
         unified_records=unified_records,
         unified_search_results=unified_search_results,
         pagination=pagination,
+<<<<<<< Updated upstream
         filter_summary=filter_summary,
         any_filter=any_filter,
         sku_query=sku_query,
@@ -337,6 +382,13 @@ def list_container():
         loading_start=loading_start,
         loading_end=loading_end,
         per_page=per_page,
+=======
+        pending_orders=pending_orders,
+        sku_query=sku_query,
+        search_results=search_results,
+        focus_container=focus_container,
+        focus_items=focus_items,
+>>>>>>> Stashed changes
     )
 
 

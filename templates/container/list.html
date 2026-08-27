@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 {# 装柜记录列表页 — 单表混合：未装柜订单 + 已装柜记录，UI 与 sku/orders/booking 完全一致 #}
 {% extends "base.html" %}
 {% block title %}装柜管理 — 供应商管理系统{% endblock %}
@@ -1027,3 +1028,252 @@ function openImportFeesForSelected() {
 }
 </script>
 {% endblock %}
+=======
+{# 装柜记录列表页 #}
+{% extends "base.html" %}
+{% block title %}装柜管理 — 供应商管理系统{% endblock %}
+{% block page_title %}装柜管理{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sku-search-box { background:#fafafa; border:1px solid #e0e0e0; }
+  .sku-search-box .form-control { border-color:#d0d0d0; }
+  .sku-search-box .form-control:focus { border-color:#888; box-shadow:none; }
+  .sku-result-card { border:1px solid #d0d0d0; }
+  .sku-result-card .card-header { background:#f5f5f5; color:#333; border-bottom:1px solid #e0e0e0; font-weight:500; }
+  .sku-focus-card { border:1px solid #d0d0d0; }
+  .sku-focus-card .card-header { background:#f5f5f5; color:#333; border-bottom:1px solid #e0e0e0; font-weight:500; }
+  .sku-match { background:#fff3bf; padding:1px 4px; border-radius:2px; }
+  .sku-focus-row { background:#f5f5f5; }
+  .keyword-tag { background:#eee; padding:2px 6px; border-radius:3px; font-family:monospace; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# 搜索框 #}
+<div class="card mb-3 sku-search-box">
+  <div class="card-body py-2">
+    <form method="GET" action="{{ url_for('container.list_container') }}" class="d-flex gap-2 align-items-center">
+      <span class="text-muted">SKU</span>
+      <input type="text" name="sku" class="form-control" placeholder="输入 SKU 关键词检索装过的柜号"
+             value="{{ sku_query or '' }}" style="max-width:320px;" autofocus>
+      <button type="submit" class="btn btn-dark btn-sm">搜索</button>
+      {% if sku_query %}
+        <a href="{{ url_for('container.list_container') }}" class="btn btn-link btn-sm text-muted">清空</a>
+      {% endif %}
+      <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-dark btn-sm ms-auto">+ 新增装柜记录</a>
+    </form>
+  </div>
+</div>
+
+{# 搜索结果模式：只显示搜索结果 + 展开详情 #}
+{% if sku_query %}
+
+  {# 搜索结果列表 #}
+  <div class="card mb-3 sku-result-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>
+        关键词 <span class="keyword-tag">{{ sku_query }}</span> · 匹配 {{ search_results|length }} 个柜号
+      </span>
+    </div>
+    {% if search_results %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>订单号</th>
+            <th>柜号</th>
+            <th>装柜日期</th>
+            <th>供应商</th>
+            <th>件数</th>
+            <th>匹配</th>
+            <th class="actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in search_results %}
+          {% set cr = r.container %}
+          <tr {% if focus_container and focus_container.id == cr.id %}class="sku-focus-row"{% endif %}>
+            <td>
+              {% if cr.order %}
+              <a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>
+              {% else %}-{% endif %}
+            </td>
+            <td><strong>{{ cr.container_no }}</strong></td>
+            <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '-' }}</td>
+            <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
+            <td>{{ cr.cargo_count }}</td>
+            <td><span class="text-muted">{{ r.matched_count }} 个 SKU</span></td>
+            <td class="actions">
+              <a href="{{ url_for('container.list_container', sku=sku_query, focus_container=cr.id) }}"
+                 class="btn btn-sm btn-outline-dark">展开</a>
+              <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center text-muted py-4">
+      未找到包含「<span class="keyword-tag">{{ sku_query }}</span>」的柜号
+    </div>
+    {% endif %}
+  </div>
+
+  {# 焦点柜号详情 #}
+  {% if focus_container %}
+  <div class="card mb-3 sku-focus-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>
+        柜号 <strong>{{ focus_container.container_no }}</strong> · 装过 {{ focus_items|length }} 个 SKU
+      </span>
+      <a href="{{ url_for('container.list_container', sku=sku_query) }}" class="btn btn-sm btn-link text-muted">收起</a>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm mb-0">
+        <thead>
+          <tr>
+            <th style="width:50px;">序号</th>
+            <th>SKU</th>
+            <th>数量</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in focus_items %}
+          <tr {% if sku_query.lower() in it.sku.lower() %}class="sku-focus-row"{% endif %}>
+            <td class="text-muted">{{ loop.index }}</td>
+            <td>
+              {% if sku_query.lower() in it.sku.lower() %}
+                <span class="sku-match"><strong>{{ it.sku }}</strong></span>
+              {% else %}
+                {{ it.sku }}
+              {% endif %}
+            </td>
+            <td>{{ it.quantity }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+{# 正常模式：主列表 #}
+{% else %}
+
+<div class="card mb-3">
+  <div class="card-body d-flex justify-content-end py-2">
+    <a href="{{ url_for('container.new_container') }}" class="btn btn-outline-dark btn-sm">+ 新增装柜记录</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>状态</th>
+          <th>订单号</th>
+          <th>供应商</th>
+          <th>柜名</th>
+          <th>柜号</th>
+          <th>装柜日期</th>
+          <th>件数</th>
+          <th>毛重(KG)</th>
+          <th>体积(CBM)</th>
+          <th>图片</th>
+          <th class="actions">操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in pending_orders %}
+        <tr class="sku-focus-row">
+          <td><span class="text-muted">待填装柜</span></td>
+          <td><a href="{{ url_for('orders.order_detail', id=o.id) }}">{{ o.order_no }}</a></td>
+          <td>{{ o.supplier_name }}</td>
+          <td>{{ o.custom_name or '-' }}</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="text-muted">-</td>
+          <td class="actions">
+            <a href="{{ url_for('container.new_container', order_id=o.id) }}" class="btn btn-sm btn-outline-dark">填装柜</a>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% for cr in container_records %}
+        <tr>
+          <td><span class="text-muted">已填装柜</span></td>
+          <td>
+            {% if cr.order %}
+            <a href="{{ url_for('orders.order_detail', id=cr.order.id) }}">{{ cr.order.order_no }}</a>
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ cr.order.supplier_name if cr.order else '-' }}</td>
+          <td>{{ cr.order.custom_name if cr.order else '-' }}</td>
+          <td>{{ cr.container_no }}</td>
+          <td>{{ cr.loading_date.strftime('%Y-%m-%d') if cr.loading_date else '' }}</td>
+          <td>{{ cr.cargo_count }}</td>
+          <td>{{ '%.2f'|format(cr.weight) if cr.weight else '' }}</td>
+          <td>{{ '%.2f'|format(cr.volume) if cr.volume else '' }}</td>
+          <td>{{ cr.images|length if cr.images else 0 }}</td>
+          <td class="actions">
+            <a href="{{ url_for('container.container_detail', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">详情</a>
+            <a href="{{ url_for('container.new_container', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">编辑</a>
+            <a href="{{ url_for('container.export_container', id=cr.id) }}" class="btn btn-sm btn-outline-secondary">导出</a>
+            <form method="POST" action="{{ url_for('container.delete_container', id=cr.id) }}" style="display:inline;"
+                  onsubmit="return confirm('确定要删除此装柜记录吗？
+关联图片也将一并删除。');">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">删除</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+
+        {% if not pending_orders and not container_records %}
+        <tr><td colspan="11">
+          <div class="text-center text-muted py-5">
+            <p class="mb-2">暂无订单和装柜记录</p>
+            <a href="{{ url_for('container.new_container') }}" class="btn btn-sm btn-outline-dark">创建第一条</a>
+          </div>
+        </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# 分页 #}
+{% if pagination and pagination.pages > 1 %}
+<div class="d-flex justify-content-center mt-3">
+  <nav>
+    <ul class="pagination mb-0">
+      {% if pagination.has_prev %}
+      <li class="page-item"><a class="page-link" href="{{ url_for('container.list_container', page=pagination.prev_num) }}">上一页</a></li>
+      {% endif %}
+      {% for p in pagination.iter_pages() %}
+        {% if p %}
+        <li class="page-item {% if p == pagination.page %}active{% endif %}">
+          <a class="page-link" href="{{ url_for('container.list_container', page=p) }}">{{ p }}</a>
+        </li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">...</span></li>
+        {% endif %}
+      {% endfor %}
+      {% if pagination.has_next %}
+      <li class="page-item"><a class="page-link" href="{{ url_for('container.list_container', page=pagination.next_num) }}">下一页</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
+>>>>>>> Stashed changes
